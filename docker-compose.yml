@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  aircall-slack-agent:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: aircall-slack-agent
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Aircall API Configuration
+      - AIRCALL_API_ID=${AIRCALL_API_ID}
+      - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
+      
+      # Slack Configuration
+      - SLACK_API_TOKEN=${SLACK_API_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      
+      # Application Configuration
+      - PORT=${PORT:-3000}
+      - NODE_ENV=${NODE_ENV:-production}
+      - EXCLUDED_USERS=${EXCLUDED_USERS:-Joel Schrock}
+      
+      # Timezone (adjust as needed)
+      - TZ=${TZ:-America/Chicago}
+    
+    volumes:
+      # Persist logs outside container
+      - ./logs:/app/logs
+      
+    restart: unless-stopped
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    
+    # Network configuration
+    networks:
+      - aircall-network
+
+networks:
+  aircall-network:
+    driver: bridge
+
+# Optional: Add a volume for persistent logs
+volumes:
+  aircall-logs:
+    driver: local
