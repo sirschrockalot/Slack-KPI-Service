@@ -1,9 +1,9 @@
-name: Deploy to Heroku (Docker)
+name: Deploy to Render
 
 on:
   push:
     branches:
-      - main  # or your default branch
+      - main
 
 jobs:
   deploy:
@@ -13,25 +13,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Log in to Heroku Container Registry
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
+      # (Optional) Add test/lint steps here
+
+      - name: Trigger Render Deploy Hook
         run: |
-          echo $HEROKU_API_KEY | docker login --username=_ --password-stdin registry.heroku.com
-
-      - name: Build Docker image
-        run: docker build -t registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web .
-
-      - name: Push Docker image
-        run: docker push registry.heroku.com/${{ secrets.HEROKU_APP_NAME }}/web
-
-      - name: Release to Heroku
-        env:
-          HEROKU_API_KEY: ${{ secrets.HEROKU_API_KEY }}
-          HEROKU_APP_NAME: ${{ secrets.HEROKU_APP_NAME }}
-        run: |
-          curl -n -X PATCH https://api.heroku.com/apps/$HEROKU_APP_NAME/formation \
-            -d '{"updates":[{"type":"web","docker_image":"'"$(docker inspect registry.heroku.com/$HEROKU_APP_NAME/web --format={{.Id}})"'"}]}' \
-            -H "Content-Type: application/json" \
-            -H "Accept: application/vnd.heroku+json; version=3.docker-releases" \
-            -H "Authorization: Bearer $HEROKU_API_KEY" 
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }} 
