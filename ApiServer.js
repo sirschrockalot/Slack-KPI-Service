@@ -1,4 +1,8 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
+const { body, validationResult } = require('express-validator');
+const helmet = require('helmet');
+const jwt = require('jsonwebtoken');
 const winston = require('winston');
 const SlackService = require('./SlackService');
 const AircallService = require('./AircallService');
@@ -97,6 +101,17 @@ class ApiServer {
    * Setup Express middleware
    */
   setupMiddleware() {
+    // Security headers
+    this.app.use(helmet());
+    // Rate limiting middleware (100 requests per 15 minutes per IP)
+    const limiter = rateLimit({
+      windowMs: 15 * 60 * 1000, // 15 minutes
+      max: 100, // limit each IP to 100 requests per windowMs
+      standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+      legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+    });
+    this.app.use(limiter);
+    
     this.app.use(express.json());
     
     // Request logging middleware
@@ -106,6 +121,25 @@ class ApiServer {
         userAgent: req.get('user-agent')
       });
       next();
+    });
+    
+    // JWT authentication middleware (skip /health and /status)
+    this.app.use((req, res, next) => {
+      if (['/health', '/status'].includes(req.path)) {
+        return next();
+      }
+      const authHeader = req.headers['authorization'];
+      const token = authHeader && authHeader.split(' ')[1];
+      if (!token) {
+        return res.status(401).json({ success: false, error: 'Missing token' });
+      }
+      jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+        if (err) {
+          return res.status(403).json({ success: false, error: 'Invalid token' });
+        }
+        req.user = user;
+        next();
+      });
     });
     
     // Error handling middleware
@@ -173,25 +207,29 @@ class ApiServer {
     });
     
     // Trigger custom report with time range
-    this.app.post('/report/custom', async (req, res) => {
-      try {
-        const { startTime, endTime, reportName } = req.body;
-        
-        if (!startTime || !endTime) {
-          return res.status(400).json({
-            success: false,
-            error: 'startTime and endTime are required (ISO format)'
-          });
+    this.app.post(
+      '/report/custom',
+      [
+        body('startTime').exists().withMessage('startTime is required').isISO8601().withMessage('startTime must be ISO8601'),
+        body('endTime').exists().withMessage('endTime is required').isISO8601().withMessage('endTime must be ISO8601'),
+        body('reportName').optional().isString().trim().escape(),
+      ],
+      async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+          return res.status(400).json({ success: false, errors: errors.array() });
         }
-        
-        this.logger.info(`Custom report triggered: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
-        await this.generateReport(reportName || 'Custom', startTime, endTime);
-        res.json({ success: true, message: 'Custom report sent successfully' });
-      } catch (error) {
-        this.logger.error('Error running custom report:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        try {
+          const { startTime, endTime, reportName } = req.body;
+          this.logger.info(`Custom report triggered: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
+          await this.generateReport(reportName || 'Custom', startTime, endTime);
+          res.json({ success: true, message: 'Custom report sent successfully' });
+        } catch (error) {
+          this.logger.error('Error running custom report:', error.message);
+          res.status(500).json({ success: false, error: error.message });
+        }
       }
-    });
+    );
     
     // Test connections endpoint
     this.app.get('/test-connections', async (req, res) => {
