@@ -6,6 +6,9 @@ const jwt = require('jsonwebtoken');
 const winston = require('winston');
 const SlackService = require('./SlackService');
 const AircallService = require('./AircallService');
+const healthRouter = require('./routes/health');
+const reportRouter = require('./routes/report');
+const testConnectionsRouter = require('./routes/testConnections');
 
 class ApiServer {
   constructor() {
@@ -156,99 +159,9 @@ class ApiServer {
    * Setup API routes
    */
   setupRoutes() {
-    // Health check endpoint
-    this.app.get('/health', (req, res) => {
-      res.json({
-        status: 'healthy',
-        timestamp: new Date().toISOString(),
-        service: 'aircall-slack-agent'
-      });
-    });
-    
-    // Service status endpoint
-    this.app.get('/status', (req, res) => {
-      res.json({
-        service: 'aircall-slack-agent',
-        mode: 'on-demand',
-        timestamp: new Date().toISOString(),
-        excludedUsers: this.config.excludedUsers,
-        endpoints: {
-          health: 'GET /health',
-          status: 'GET /status',
-          afternoonReport: 'POST /report/afternoon',
-          nightReport: 'POST /report/night',
-          customReport: 'POST /report/custom'
-        }
-      });
-    });
-    
-    // Trigger afternoon report
-    this.app.post('/report/afternoon', async (req, res) => {
-      try {
-        this.logger.info('Afternoon report triggered via API');
-        await this.generateReport('afternoon');
-        res.json({ success: true, message: 'Afternoon report sent successfully' });
-      } catch (error) {
-        this.logger.error('Error running afternoon report:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-    
-    // Trigger night report
-    this.app.post('/report/night', async (req, res) => {
-      try {
-        this.logger.info('Night report triggered via API');
-        await this.generateReport('night');
-        res.json({ success: true, message: 'Night report sent successfully' });
-      } catch (error) {
-        this.logger.error('Error running night report:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
-    
-    // Trigger custom report with time range
-    this.app.post(
-      '/report/custom',
-      [
-        body('startTime').exists().withMessage('startTime is required').isISO8601().withMessage('startTime must be ISO8601'),
-        body('endTime').exists().withMessage('endTime is required').isISO8601().withMessage('endTime must be ISO8601'),
-        body('reportName').optional().isString().trim().escape(),
-      ],
-      async (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) {
-          return res.status(400).json({ success: false, errors: errors.array() });
-        }
-        try {
-          const { startTime, endTime, reportName } = req.body;
-          this.logger.info(`Custom report triggered: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
-          await this.generateReport(reportName || 'Custom', startTime, endTime);
-          res.json({ success: true, message: 'Custom report sent successfully' });
-        } catch (error) {
-          this.logger.error('Error running custom report:', error.message);
-          res.status(500).json({ success: false, error: error.message });
-        }
-      }
-    );
-    
-    // Test connections endpoint
-    this.app.get('/test-connections', async (req, res) => {
-      try {
-        const slackValid = await this.slackService.validateConnection();
-        const aircallValid = await this.aircallService.testConnection();
-        
-        res.json({
-          success: slackValid && aircallValid,
-          connections: {
-            slack: slackValid ? 'connected' : 'failed',
-            aircall: aircallValid ? 'connected' : 'failed'
-          }
-        });
-      } catch (error) {
-        this.logger.error('Error testing connections:', error.message);
-        res.status(500).json({ success: false, error: error.message });
-      }
-    });
+    this.app.use(healthRouter(this.logger, this.config));
+    this.app.use(reportRouter(this.logger, this.generateReport.bind(this)));
+    this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
   }
   
   /**
