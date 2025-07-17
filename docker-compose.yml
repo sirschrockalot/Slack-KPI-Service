@@ -21,6 +21,7 @@ services:
       - PORT=${PORT:-3000}
       - NODE_ENV=${NODE_ENV:-production}
       - EXCLUDED_USERS=${EXCLUDED_USERS:-Joel Schrock}
+      - JWT_SECRET=${JWT_SECRET}
       
       # Timezone (adjust as needed)
       - TZ=${TZ:-America/Chicago}
