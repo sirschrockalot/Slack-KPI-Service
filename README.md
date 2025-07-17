@@ -10,6 +10,14 @@ A Node.js service that fetches call activity data from Aircall and sends automat
 - 🔍 **Health monitoring** - Built-in health checks and connection validation
 - 📝 **Comprehensive logging** - Winston-based logging with file and console output
 - 🌐 **RESTful API** - Clean API interface for external integrations
+- 🛡️ **Security** - Rate limiting, input validation, security headers, and JWT authentication
+
+## Security Features
+
+- **Rate Limiting:** All endpoints are protected by rate limiting (100 requests per 15 minutes per IP).
+- **Input Validation & Sanitization:** All input to endpoints is validated and sanitized using `express-validator`.
+- **Security Headers:** HTTP security headers are set using `helmet`.
+- **JWT Authentication:** All endpoints (except `/health` and `/status`) require a valid JWT in the `Authorization` header.
 
 ## Prerequisites
 
@@ -54,6 +62,9 @@ SLACK_CHANNEL_ID=C1234567890
 # Optional Configuration
 PORT=3000
 EXCLUDED_USERS=Joel Schrock,Another User
+
+# JWT Secret (required for authentication)
+JWT_SECRET=your_strong_jwt_secret
 
 # GitHub Actions (alternative variable names)
 INPUT_AIRCALL_API_ID=your_aircall_api_id
@@ -114,19 +125,19 @@ The service exposes the following endpoints:
 ```bash
 GET /health
 ```
-Returns service health status.
+Returns service health status. (No authentication required)
 
 #### Service Status
 ```bash
 GET /status
 ```
-Returns detailed service information and available endpoints.
+Returns detailed service information and available endpoints. (No authentication required)
 
 #### Test Connections
 ```bash
 GET /test-connections
 ```
-Validates Aircall and Slack API connections.
+**Requires JWT authentication**
 
 #### Generate Reports
 
@@ -134,16 +145,19 @@ Validates Aircall and Slack API connections.
 ```bash
 POST /report/afternoon
 ```
+**Requires JWT authentication**
 
 **Night Report**
 ```bash
 POST /report/night
 ```
+**Requires JWT authentication**
 
 **Custom Time Range Report**
 ```bash
 POST /report/custom
 Content-Type: application/json
+Authorization: Bearer <your_jwt_token>
 
 {
   "startTime": "2025-07-03T11:00:00.000Z",
@@ -156,15 +170,17 @@ Content-Type: application/json
 
 #### Using curl
 ```bash
-# Health check
+# Health check (no auth)
 curl http://localhost:3000/health
 
-# Generate afternoon report
-curl -X POST http://localhost:3000/report/afternoon
+# Generate afternoon report (with JWT)
+curl -X POST http://localhost:3000/report/afternoon \
+  -H "Authorization: Bearer <your_jwt_token>"
 
-# Generate custom report
+# Generate custom report (with JWT)
 curl -X POST http://localhost:3000/report/custom \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your_jwt_token>" \
   -d '{
     "startTime": "2025-07-03T11:00:00.000Z",
     "endTime": "2025-07-04T01:00:00.000Z",
@@ -174,18 +190,22 @@ curl -X POST http://localhost:3000/report/custom \
 
 #### Using JavaScript
 ```javascript
-// Generate afternoon report
+// Generate afternoon report (with JWT)
 fetch('http://localhost:3000/report/afternoon', {
-  method: 'POST'
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer <your_jwt_token>'
+  }
 })
 .then(response => response.json())
 .then(data => console.log(data));
 
-// Generate custom report
+// Generate custom report (with JWT)
 fetch('http://localhost:3000/report/custom', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
+    'Authorization': 'Bearer <your_jwt_token>'
   },
   body: JSON.stringify({
     startTime: '2025-07-03T11:00:00.000Z',
@@ -236,6 +256,7 @@ The service is designed to work with GitHub Actions. Use the `INPUT_*` environme
     INPUT_SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
     INPUT_SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}
     INPUT_EXCLUDED_USERS: ${{ secrets.EXCLUDED_USERS }}
+    JWT_SECRET: ${{ secrets.JWT_SECRET }}
   run: |
     npm install
     npm start
