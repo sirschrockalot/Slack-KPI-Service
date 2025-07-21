@@ -10,6 +10,7 @@ const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
+const aircallDataCronJobRouter = require('./routes/aircallDataCronJob');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
 const HourlySyncService = require('./services/syncAircallHourly');
@@ -185,6 +186,7 @@ class ApiServer {
   setupRoutes() {
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
+    this.app.use(aircallDataCronJobRouter(this.logger, this.generateReport.bind(this)));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
   }
   
@@ -262,6 +264,9 @@ class ApiServer {
         this.logger.info('  POST /report/afternoon - Trigger afternoon report');
         this.logger.info('  POST /report/night - Trigger night report');
         this.logger.info('  POST /report/custom - Trigger custom time range report');
+        // Trigger catch-up sync immediately on startup
+        this.logger.info('Triggering catch-up sync on startup...');
+        this.hourlySyncService.syncCatchUp();
       });
       
       return this.server;
