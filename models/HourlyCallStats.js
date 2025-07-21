@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const hourlyCallStatsSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   name: { type: String },
+  email: { type: String },
   timestamp: { type: Date, required: true },
   totalDials: { type: Number, default: 0 },
   totalTalkTimeMinutes: { type: Number, default: 0 },

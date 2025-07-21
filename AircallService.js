@@ -234,6 +234,7 @@ class AircallService {
           const userActivity = {
             user_id: user.id,
             name: user.name,
+            email: user.email,
             calls: calls,
             ...callStats,
             availability: user.availability_status || 'unknown'
@@ -257,6 +258,7 @@ class AircallService {
           activitySummary.users.push({
             user_id: user.id,
             name: user.name,
+            email: user.email,
             calls: [],
             totalCalls: 0,
             answeredCalls: 0,

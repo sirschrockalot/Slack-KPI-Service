@@ -61,6 +61,7 @@ class HourlySyncService {
         const userStats = {
           userId: user.user_id,
           name: user.name,
+          email: user.email,
           timestamp: startTime,
           totalDials: user.totalCalls,
           totalTalkTimeMinutes: user.totalDurationMinutes,
