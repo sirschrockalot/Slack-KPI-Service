@@ -15,6 +15,7 @@ const mongoose = require('mongoose');
 const cron = require('node-cron');
 const HourlySyncService = require('./services/syncAircallHourly');
 const AggregateStatsService = require('./services/aggregateStats');
+const hourlyCallStatsRouter = require('./routes/hourlyCallStats');
 
 class ApiServer {
   constructor() {
@@ -187,6 +188,7 @@ class ApiServer {
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
     this.app.use(aircallDataCronJobRouter(this.logger, this.generateReport.bind(this)));
+    this.app.use(hourlyCallStatsRouter(this.logger));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
   }
   
