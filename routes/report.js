@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const Report = require('../models/Report');
-const UserCallStats = require('../models/UserCallStats');
+// Removed: const UserCallStats = require('../models/UserCallStats');
 
 module.exports = (logger, generateReport, slackService) => {
   const router = express.Router();
@@ -65,16 +65,16 @@ module.exports = (logger, generateReport, slackService) => {
       // Get raw data from Aircall
       const data = await generateReport('Today', startOfDay.toISOString(), now.toISOString());
       logger.info("Received response from Aircall for today's report");
-      const userStats = data.users.map(user => ({
-        userId: user.user_id,
-        name: user.name,
-        totalDials: user.totalCalls,
-        totalTalkTimeMinutes: user.totalDurationMinutes,
-        startDate: startOfDay,
-        endDate: now
-      }));
-      await UserCallStats.insertMany(userStats);
-      logger.info("Today's formatted report data saved to MongoDB");
+      // Removed: const userStats = data.users.map(user => ({
+      // Removed:   userId: user.user_id,
+      // Removed:   name: user.name,
+      // Removed:   totalDials: user.totalCalls,
+      // Removed:   totalTalkTimeMinutes: user.totalDurationMinutes,
+      // Removed:   startDate: startOfDay,
+      // Removed:   endDate: now
+      // Removed: }));
+      // Removed: await UserCallStats.insertMany(userStats);
+      // Removed: logger.info("Today's formatted report data saved to MongoDB");
       res.json({ success: true });
     } catch (error) {
       logger.error("Error running today's report:", error.message);
