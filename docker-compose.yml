@@ -25,6 +25,9 @@ services:
       
       # Timezone (adjust as needed)
       - TZ=${TZ:-America/Chicago}
+
+      # MongoDB Configuration
+      - MONGODB_URI=${MONGODB_URI}
     
     volumes:
       # Persist logs outside container

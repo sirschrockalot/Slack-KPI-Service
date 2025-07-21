@@ -95,45 +95,22 @@ class AircallService {
       let hasMore = true;
       
       while (hasMore) {
-        let callsResponse;
-        
-        try {
-          // Method 1: Try user-specific calls endpoint first
-          callsResponse = await this.aircallClient.get(`/users/${userId}/calls`, {
-            params: {
-              from: startTimestamp,
-              to: endTimestamp,
-              per_page: perPage,
-              page: page
-            }
-          });
-        } catch (error) {
-          // Method 2: Fallback to general calls endpoint with user_id filter
-          callsResponse = await this.aircallClient.get('/calls', {
-            params: {
-              user_id: userId,
-              from: startTimestamp,
-              to: endTimestamp,
-              per_page: perPage,
-              page: page
-            }
-          });
-        }
-        
-        const calls = callsResponse.data.calls || [];
-        
-        // Additional filtering to ensure calls belong to this specific user
-        const userCalls = calls.filter(call => {
-          return call.user && call.user.id === userId;
+        const response = await this.aircallClient.get('/calls', {
+          params: {
+            user_id: userId,
+            from: startTimestamp,
+            to: endTimestamp,
+            per_page: perPage,
+            page: page
+          }
         });
         
-        allCalls = [...allCalls, ...userCalls];
+        const calls = response.data.calls || [];
+        allCalls = [...allCalls, ...calls];
         
-        // Check if there are more pages
         hasMore = calls.length === perPage;
         page++;
         
-        // Safety check to prevent infinite loops
         if (page > 100) {
           this.logger.warn(`Reached maximum page limit for user ${userId}`);
           break;
@@ -255,7 +232,9 @@ class AircallService {
           const callStats = this.processCallData(calls);
           
           const userActivity = {
+            user_id: user.id,
             name: user.name,
+            calls: calls,
             ...callStats,
             availability: user.availability_status || 'unknown'
           };
@@ -276,7 +255,9 @@ class AircallService {
           this.logger.error(`Error processing user ${user.name} (ID: ${user.id}):`, error.message);
           // Add user with zero activity if API call fails
           activitySummary.users.push({
+            user_id: user.id,
             name: user.name,
+            calls: [],
             totalCalls: 0,
             answeredCalls: 0,
             missedCalls: 0,
@@ -294,6 +275,7 @@ class AircallService {
       }
       
       this.logger.info(`Retrieved activity for ${activitySummary.users.length} users`);
+      this.logger.info('Final activity summary being returned:', { summary: JSON.stringify(activitySummary, null, 2) });
       return activitySummary;
       
     } catch (error) {
