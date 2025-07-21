@@ -247,7 +247,7 @@ class ApiServer {
       // Schedule hourly sync job
       cron.schedule('0 * * * *', () => {
         this.logger.info('Triggering hourly Aircall data sync...');
-        this.hourlySyncService.syncLastHour();
+        this.hourlySyncService.syncCatchUp();
       });
 
       // Start the Express server
