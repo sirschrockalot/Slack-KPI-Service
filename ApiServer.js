@@ -253,15 +253,6 @@ class ApiServer {
       // Start the Express server
       this.server = this.app.listen(this.config.port, '0.0.0.0', () => {
         this.logger.info(`Aircall Slack Agent API server started on port ${this.config.port}`);
-        console.log(`Aircall Slack Agent API server started on port ${this.config.port}`);
-        console.log('JWT_SECRET in use:', process.env.JWT_SECRET);
-        try {
-          const jwt = require('jsonwebtoken');
-          const sampleToken = jwt.sign({ user: 'kpi-app' }, process.env.JWT_SECRET);
-          console.log('Sample token for { user: "kpi-app" }:', sampleToken);
-        } catch (e) {
-          console.log('Could not generate sample token:', e.message);
-        }
         this.logger.info('Service running in ON-DEMAND mode');
         this.logger.info(`Excluded users: ${this.config.excludedUsers.join(', ')}`);
         this.logger.info('Available endpoints:');
