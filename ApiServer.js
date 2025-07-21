@@ -3,17 +3,27 @@ const rateLimit = require('express-rate-limit');
 const { body, validationResult } = require('express-validator');
 const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
+const cors = require('cors');
 const winston = require('winston');
 const SlackService = require('./SlackService');
 const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
+const mongoose = require('mongoose');
+const cron = require('node-cron');
+const HourlySyncService = require('./services/syncAircallHourly');
+const AggregateStatsService = require('./services/aggregateStats');
 
 class ApiServer {
   constructor() {
     this.app = express();
     this.server = null;
+    
+    // Connect to MongoDB
+    mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+      .then(() => console.log('MongoDB connected'))
+      .catch(err => console.error('MongoDB connection error:', err));
     
     // Configure logger
     this.logger = winston.createLogger({
@@ -98,12 +108,26 @@ class ApiServer {
       this.config.aircallApiToken,
       this.config.excludedUsers
     );
+
+    this.hourlySyncService = new HourlySyncService(this.aircallService, this.logger);
   }
   
   /**
    * Setup Express middleware
    */
   setupMiddleware() {
+    // CORS configuration to allow localhost
+    this.app.use(cors({
+      origin: function (origin, callback) {
+        console.log('CORS request from origin:', origin);
+        if (!origin) return callback(null, true); // allow non-browser requests
+        if (/^http:\/\/localhost(:\d+)?$/.test(origin)) {
+          return callback(null, true);
+        }
+        return callback(new Error('Not allowed by CORS'));
+      },
+      credentials: true
+    }));
     // Security headers
     this.app.use(helmet());
     // Rate limiting middleware (100 requests per 15 minutes per IP)
@@ -160,7 +184,7 @@ class ApiServer {
    */
   setupRoutes() {
     this.app.use(healthRouter(this.logger, this.config));
-    this.app.use(reportRouter(this.logger, this.generateReport.bind(this)));
+    this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
   }
   
@@ -180,16 +204,7 @@ class ApiServer {
         throw new Error('Failed to retrieve activity data from Aircall');
       }
       
-      // Send report to Slack
-      const success = await this.slackService.sendActivityReport(activityData);
-      
-      if (!success) {
-        throw new Error('Failed to send report to Slack');
-      }
-      
-      this.logger.info(`Successfully sent ${reportType} report to Slack`);
-      return true;
-      
+      return activityData;
     } catch (error) {
       this.logger.error(`Error generating ${reportType} report:`, error.message);
       throw error;
@@ -229,9 +244,24 @@ class ApiServer {
       // Validate connections first
       await this.validateConnections();
       
+      // Schedule hourly sync job
+      cron.schedule('0 * * * *', () => {
+        this.logger.info('Triggering hourly Aircall data sync...');
+        this.hourlySyncService.syncLastHour();
+      });
+
       // Start the Express server
-      this.server = this.app.listen(this.config.port, () => {
+      this.server = this.app.listen(this.config.port, '0.0.0.0', () => {
         this.logger.info(`Aircall Slack Agent API server started on port ${this.config.port}`);
+        console.log(`Aircall Slack Agent API server started on port ${this.config.port}`);
+        console.log('JWT_SECRET in use:', process.env.JWT_SECRET);
+        try {
+          const jwt = require('jsonwebtoken');
+          const sampleToken = jwt.sign({ user: 'kpi-app' }, process.env.JWT_SECRET);
+          console.log('Sample token for { user: "kpi-app" }:', sampleToken);
+        } catch (e) {
+          console.log('Could not generate sample token:', e.message);
+        }
         this.logger.info('Service running in ON-DEMAND mode');
         this.logger.info(`Excluded users: ${this.config.excludedUsers.join(', ')}`);
         this.logger.info('Available endpoints:');
