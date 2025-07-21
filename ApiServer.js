@@ -21,7 +21,7 @@ class ApiServer {
     this.server = null;
     
     // Connect to MongoDB
-    mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+    mongoose.connect(process.env.MONGODB_URI)
       .then(() => console.log('MongoDB connected'))
       .catch(err => console.error('MongoDB connection error:', err));
     
