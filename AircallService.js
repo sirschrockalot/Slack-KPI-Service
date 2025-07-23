@@ -159,8 +159,8 @@ class AircallService {
   /**
    * Process call data to generate activity statistics
    * Modified to:
-   * 1) Total calls = Outbound calls only
-   * 2) Total talk time = (inbound call time) + (outbound call time)
+   * 1) Total calls = Outbound calls only (number of outbound dials)
+   * 2) Total talk time = (inbound connected time) + (outbound connected time)
    */
   processCallData(calls) {
     // Separate inbound and outbound calls
@@ -176,13 +176,15 @@ class AircallService {
     // Missed calls = Outbound calls that weren't answered
     const missedCalls = totalCalls - answeredCalls;
     
-    // Total talk time = (inbound call time) + (outbound call time)
+    // Total talk time = (inbound connected call time) + (outbound connected call time)
     const inboundDuration = inboundCalls.reduce((sum, call) => {
-      return sum + (call.duration || 0);
+      // Only count duration for answered calls
+      return sum + (call.answered_at ? (call.duration || 0) : 0);
     }, 0);
     
     const outboundDuration = outboundCalls.reduce((sum, call) => {
-      return sum + (call.duration || 0);
+      // Only count duration for answered calls
+      return sum + (call.answered_at ? (call.duration || 0) : 0);
     }, 0);
     
     const totalDuration = inboundDuration + outboundDuration;
@@ -244,10 +246,10 @@ class AircallService {
           
           // Log detailed breakdown for debugging
           this.logger.info(`User ${user.name} activity:`, {
-            totalCalls: callStats.totalCalls,
+            totalCalls: callStats.totalCalls, // Outbound dials only
             outboundCalls: callStats.outboundCalls,
             inboundCalls: callStats.inboundCalls,
-            totalTalkTime: callStats.totalDurationMinutes,
+            totalTalkTime: callStats.totalDurationMinutes, // Connected time only (inbound + outbound)
             inboundTalkTime: callStats.inboundDurationMinutes,
             outboundTalkTime: callStats.outboundDurationMinutes
           });
