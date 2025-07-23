@@ -134,6 +134,11 @@ class AircallService {
     if (customStart && customEnd) {
       startTime = new Date(customStart);
       endTime = new Date(customEnd);
+    } else if (timePeriod === 'hourly') {
+      // For hourly sync, use the current hour if no custom times provided
+      startTime = new Date(now);
+      startTime.setMinutes(0, 0, 0);
+      endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
     } else if (timePeriod === 'afternoon') {
       // 9AM CST to 1PM CST
       startTime = new Date(now);

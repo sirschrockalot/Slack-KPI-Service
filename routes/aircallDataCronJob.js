@@ -80,5 +80,72 @@ module.exports = (logger, generateReport) => {
     }
   });
 
+  // Test endpoint to manually trigger hourly sync for a specific hour
+  router.get('/test-hourly-sync', async (req, res) => {
+    try {
+      logger.info("/test-hourly-sync route called");
+      const { hour, userId } = req.query;
+      
+      // Parse the hour parameter (format: YYYY-MM-DDTHH:00:00.000Z)
+      let startTime, endTime;
+      if (hour) {
+        startTime = new Date(hour);
+        endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+      } else {
+        // Default to current hour
+        const now = new Date();
+        startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
+        endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
+      }
+      
+      logger.info(`Testing hourly sync: from ${startTime.toISOString()} to ${endTime.toISOString()}`);
+      
+      // Get data from Aircall for this hour
+      const data = await generateReport('hourly', startTime.toISOString(), endTime.toISOString());
+      logger.info("Received response from Aircall for hourly sync test");
+      
+      // Filter by userId if provided
+      let filteredUsers = data.users;
+      if (userId) {
+        filteredUsers = filteredUsers.filter(user => String(user.user_id) === String(userId));
+      }
+      
+      // Save to MongoDB for each filtered user with hourly timestamp
+      const savedUsers = [];
+      for (const user of filteredUsers) {
+        const userStats = {
+          userId: user.user_id,
+          name: user.name,
+          email: user.email,
+          timestamp: startTime, // Use hourly timestamp
+          totalDials: user.totalCalls,
+          totalTalkTimeMinutes: user.totalDurationMinutes,
+          callIds: user.calls ? user.calls.map(c => c.id) : [],
+        };
+        
+        const result = await HourlyCallStats.updateOne(
+          { userId: user.user_id, timestamp: startTime },
+          { $set: userStats },
+          { upsert: true }
+        );
+        
+        savedUsers.push({
+          ...userStats,
+          upserted: result.upsertedCount > 0,
+          modified: result.modifiedCount > 0
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        message: `Saved ${savedUsers.length} user records for hour ${startTime.toISOString()}`,
+        data: savedUsers 
+      });
+    } catch (error) {
+      logger.error("Error testing hourly sync:", error.message);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   return router;
 }; 
