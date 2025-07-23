@@ -75,7 +75,7 @@ class SlackService {
    * Format activity data into Slack block format
    * Updated to reflect new metrics:
    * - Total calls = Outbound calls only
-   * - Total talk time = Inbound + Outbound call time
+   * - Total talk time = Inbound + Outbound connected call time only
    */
   formatActivityMessage(activityData) {
     const period = activityData.period.charAt(0).toUpperCase() + activityData.period.slice(1);
@@ -211,7 +211,7 @@ class SlackService {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `📋 *Calculation Details:*\n• Total Calls = Outbound calls only\n• Total Talk Time = Inbound + Outbound call duration\n• Answer Rate = Answered outbound calls / Total outbound calls`
+        text: `📋 *Calculation Details:*\n• Total Calls = Outbound calls only\n• Total Talk Time = Inbound + Outbound connected call duration only\n• Answer Rate = Answered outbound calls / Total outbound calls`
       }
     });
     

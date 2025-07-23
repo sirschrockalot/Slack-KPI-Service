@@ -10,8 +10,15 @@ module.exports = (logger, generateReport, slackService) => {
   router.post('/report/afternoon', async (req, res) => {
     try {
       logger.info('Afternoon report triggered via API');
-      await generateReport('afternoon');
-      res.json({ success: true, message: 'Afternoon report sent successfully' });
+      const data = await generateReport('afternoon');
+      const sent = await slackService.sendActivityReport(data);
+      if (sent) {
+        logger.info('Afternoon report sent to Slack successfully');
+        res.json({ success: true, message: 'Afternoon report sent to Slack successfully' });
+      } else {
+        logger.error('Failed to send afternoon report to Slack');
+        res.status(500).json({ success: false, error: 'Failed to send afternoon report to Slack' });
+      }
     } catch (error) {
       logger.error('Error running afternoon report:', error.message);
       res.status(500).json({ success: false, error: error.message });
