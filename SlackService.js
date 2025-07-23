@@ -149,6 +149,16 @@ class SlackService {
       const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
       const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
       
+      // Log individual user data for debugging
+      this.logger.info(`SlackService: Processing user ${index + 1}/${sortedUsers.length}:`, {
+        name: user.name,
+        totalCalls: user.totalCalls,
+        answeredCalls: user.answeredCalls,
+        inboundCalls: user.inboundCalls || 0,
+        answeredInboundCalls: user.answeredInboundCalls || 0,
+        totalDurationMinutes: user.totalDurationMinutes
+      });
+      
       const userBlock = {
         type: 'section',
         fields: [
@@ -273,7 +283,28 @@ class SlackService {
    * Send activity report to Slack
    */
   async sendActivityReport(activityData) {
+    // Log the data structure for debugging
+    this.logger.info('SlackService: Activity data structure:', {
+      period: activityData.period,
+      startTime: activityData.startTime,
+      endTime: activityData.endTime,
+      userCount: activityData.users ? activityData.users.length : 0,
+      users: activityData.users ? activityData.users.map(u => ({
+        name: u.name,
+        totalCalls: u.totalCalls,
+        answeredCalls: u.answeredCalls,
+        totalDurationMinutes: u.totalDurationMinutes
+      })) : []
+    });
+    
     const message = this.formatActivityMessage(activityData);
+    
+    // Log the formatted message structure
+    this.logger.info('SlackService: Formatted message structure:', {
+      blockCount: message.blocks ? message.blocks.length : 0,
+      userBlocks: message.blocks ? message.blocks.filter(b => b.type === 'section' && b.fields).length : 0
+    });
+    
     return await this.sendMessage(message);
   }
 }

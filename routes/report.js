@@ -11,6 +11,20 @@ module.exports = (logger, generateReport, slackService) => {
     try {
       logger.info('Afternoon report triggered via API');
       const data = await generateReport('afternoon');
+      
+      // Debug: Log the data structure to see if users have unique data
+      logger.info('DEBUG: Raw activity data structure:', {
+        period: data.period,
+        userCount: data.users ? data.users.length : 0,
+        users: data.users ? data.users.map(u => ({
+          name: u.name,
+          user_id: u.user_id,
+          totalCalls: u.totalCalls,
+          answeredCalls: u.answeredCalls,
+          totalDurationMinutes: u.totalDurationMinutes
+        })) : []
+      });
+      
       const sent = await slackService.sendActivityReport(data);
       if (sent) {
         logger.info('Afternoon report sent to Slack successfully');
@@ -85,6 +99,44 @@ module.exports = (logger, generateReport, slackService) => {
       res.json({ success: true });
     } catch (error) {
       logger.error("Error running today's report:", error.message);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // Debug endpoint to see raw activity data
+  router.get('/debug/activity-data', async (req, res) => {
+    try {
+      logger.info('Debug activity data endpoint called');
+      const data = await generateReport('afternoon');
+      
+      // Return the raw data structure for inspection
+      res.json({
+        success: true,
+        data: {
+          period: data.period,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          userCount: data.users ? data.users.length : 0,
+          users: data.users ? data.users.map(u => ({
+            name: u.name,
+            user_id: u.user_id,
+            email: u.email,
+            totalCalls: u.totalCalls,
+            answeredCalls: u.answeredCalls,
+            missedCalls: u.missedCalls,
+            totalDurationMinutes: u.totalDurationMinutes,
+            outboundCalls: u.outboundCalls,
+            answeredOutboundCalls: u.answeredOutboundCalls,
+            inboundCalls: u.inboundCalls,
+            answeredInboundCalls: u.answeredInboundCalls,
+            inboundDurationMinutes: u.inboundDurationMinutes,
+            outboundDurationMinutes: u.outboundDurationMinutes,
+            callCount: u.calls ? u.calls.length : 0
+          })) : []
+        }
+      });
+    } catch (error) {
+      logger.error('Error getting debug activity data:', error.message);
       res.status(500).json({ success: false, error: error.message });
     }
   });

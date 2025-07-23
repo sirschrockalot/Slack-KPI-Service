@@ -152,9 +152,9 @@ class ApiServer {
       next();
     });
     
-    // JWT authentication middleware (skip /health and /status)
+    // JWT authentication middleware (skip /health, /status, and debug endpoints)
     this.app.use((req, res, next) => {
-      if (['/health', '/status'].includes(req.path)) {
+      if (['/health', '/status'].includes(req.path) || req.path.startsWith('/debug/')) {
         return next();
       }
       const authHeader = req.headers['authorization'];

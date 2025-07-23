@@ -94,10 +94,16 @@ class AircallService {
       const perPage = 50;
       let hasMore = true;
       
+      this.logger.info(`Making API call for user ${userId} with params:`, {
+        from: startTimestamp,
+        to: endTimestamp,
+        per_page: perPage,
+        page: page
+      });
+      
       while (hasMore) {
         const response = await this.aircallClient.get('/calls', {
           params: {
-            user_id: userId,
             from: startTimestamp,
             to: endTimestamp,
             per_page: perPage,
@@ -106,6 +112,18 @@ class AircallService {
         });
         
         const calls = response.data.calls || [];
+        
+        // Debug: Log first few calls to see if they're actually for the right user
+        if (page === 1 && calls.length > 0) {
+          this.logger.info(`First call from API:`, {
+            callId: calls[0].id,
+            direction: calls[0].direction,
+            user: calls[0].user,
+            userId: calls[0].user?.id,
+            expectedUserId: userId
+          });
+        }
+        
         allCalls = [...allCalls, ...calls];
         
         hasMore = calls.length === perPage;
@@ -117,7 +135,11 @@ class AircallService {
         }
       }
       
-      return allCalls;
+      // Filter calls by user ID since the API doesn't filter properly
+      const userCalls = allCalls.filter(call => call.user && call.user.id === userId);
+      
+      this.logger.info(`Fetched ${allCalls.length} total calls, filtered to ${userCalls.length} calls for user ${userId} (${startTimestamp} to ${endTimestamp})`);
+      return userCalls;
     } catch (error) {
       this.logger.error(`Error fetching calls for user ${userId}:`, error.message);
       throw error;
@@ -251,12 +273,14 @@ class AircallService {
           
           // Log detailed breakdown for debugging
           this.logger.info(`User ${user.name} activity:`, {
+            userId: user.id,
             totalCalls: callStats.totalCalls, // Outbound dials only
             outboundCalls: callStats.outboundCalls,
             inboundCalls: callStats.inboundCalls,
             totalTalkTime: callStats.totalDurationMinutes, // Connected time only (inbound + outbound)
             inboundTalkTime: callStats.inboundDurationMinutes,
-            outboundTalkTime: callStats.outboundDurationMinutes
+            outboundTalkTime: callStats.outboundDurationMinutes,
+            callCount: calls.length
           });
           
         } catch (error) {
