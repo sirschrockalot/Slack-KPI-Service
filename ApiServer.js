@@ -16,6 +16,8 @@ const cron = require('node-cron');
 const HourlySyncService = require('./services/syncAircallHourly');
 const AggregateStatsService = require('./services/aggregateStats');
 const hourlyCallStatsRouter = require('./routes/hourlyCallStats');
+const ReportScheduler = require('./services/reportScheduler');
+const schedulerRouter = require('./routes/scheduler');
 
 class ApiServer {
   constructor() {
@@ -112,6 +114,10 @@ class ApiServer {
     );
 
     this.hourlySyncService = new HourlySyncService(this.aircallService, this.logger);
+    
+    // Initialize report scheduler
+    const baseUrl = `http://localhost:${this.config.port}`;
+    this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
   }
   
   /**
@@ -152,9 +158,11 @@ class ApiServer {
       next();
     });
     
-    // JWT authentication middleware (skip /health, /status, and debug endpoints)
+    // JWT authentication middleware (skip /health, /status, debug endpoints, and scheduler endpoints)
     this.app.use((req, res, next) => {
-      if (['/health', '/status'].includes(req.path) || req.path.startsWith('/debug/')) {
+      if (['/health', '/status'].includes(req.path) || 
+          req.path.startsWith('/debug/') || 
+          req.path.startsWith('/scheduler/')) {
         return next();
       }
       const authHeader = req.headers['authorization'];
@@ -190,6 +198,7 @@ class ApiServer {
     this.app.use(aircallDataCronJobRouter(this.logger, this.generateReport.bind(this)));
     this.app.use(hourlyCallStatsRouter(this.logger));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
+    this.app.use(schedulerRouter(this.logger, this.reportScheduler));
   }
   
   /**
@@ -266,6 +275,17 @@ class ApiServer {
         this.logger.info('  POST /report/afternoon - Trigger afternoon report');
         this.logger.info('  POST /report/night - Trigger night report');
         this.logger.info('  POST /report/custom - Trigger custom time range report');
+        this.logger.info('  GET /scheduler/status - Get scheduler status');
+        this.logger.info('  POST /scheduler/start - Start scheduler');
+        this.logger.info('  POST /scheduler/stop - Stop scheduler');
+        this.logger.info('  POST /scheduler/trigger/afternoon - Manually trigger afternoon report');
+        this.logger.info('  POST /scheduler/trigger/night - Manually trigger night report');
+        this.logger.info('  GET /scheduler/next-runs - Get next scheduled run times');
+        
+        // Start the report scheduler
+        this.logger.info('Starting report scheduler...');
+        this.reportScheduler.start();
+        
         // Trigger catch-up sync immediately on startup
         this.logger.info('Triggering catch-up sync on startup...');
         this.hourlySyncService.syncCatchUp();
@@ -283,6 +303,11 @@ class ApiServer {
    * Stop the API server
    */
   stop() {
+    // Stop the report scheduler
+    if (this.reportScheduler) {
+      this.reportScheduler.stop();
+    }
+    
     if (this.server) {
       this.server.close(() => {
         this.logger.info('API server stopped');
