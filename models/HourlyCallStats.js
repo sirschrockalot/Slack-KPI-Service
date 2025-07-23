@@ -5,8 +5,8 @@ const hourlyCallStatsSchema = new mongoose.Schema({
   name: { type: String },
   email: { type: String },
   timestamp: { type: Date, required: true },
-  totalDials: { type: Number, default: 0 },
-  totalTalkTimeMinutes: { type: Number, default: 0 },
+  totalDials: { type: Number, default: 0 }, // Number of outbound dials made
+  totalTalkTimeMinutes: { type: Number, default: 0 }, // Total connected time (inbound + outbound)
   callIds: { type: [String], default: [] },
   source: { type: String, default: 'aircall' },
   createdAt: { type: Date, default: Date.now, expires: '13m' } // TTL index for 13 months
