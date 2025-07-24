@@ -1,0 +1,120 @@
+name: Deploy to GKE
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.js'
+      - '**.json'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-to-gke.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**.js'
+      - '**.json'
+      - 'Dockerfile'
+      - '.github/workflows/deploy-to-gke.yml'
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  CLUSTER_NAME: aircall-slack-cluster
+  CLUSTER_REGION: us-central1
+  IMAGE_NAME: aircall-slack-service
+
+jobs:
+  deploy:
+    name: Deploy to GKE
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Application Code
+      uses: actions/checkout@v4
+      
+    - name: Authenticate to Google Cloud
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+        
+    - name: Configure Docker for GCR
+      run: gcloud auth configure-docker
+      
+    - name: Get GKE Credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
+          --region ${{ env.CLUSTER_REGION }} \
+          --project ${{ env.PROJECT_ID }}
+          
+    - name: Build and Push Docker Image
+      run: |
+        # Build the image with commit SHA and latest tags
+        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
+        docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest .
+        
+        # Push images
+        docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+        docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
+        
+    - name: Checkout Infrastructure Code
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository_owner }}/gks_infra_as_code
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Deploy to Kubernetes
+      run: |
+        # Update deployment with new image
+        sed -i "s|gcr.io/PROJECT_ID/aircall-slack-service:latest|gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/namespace.yaml
+        kubectl apply -f k8s/configmap.yaml
+        
+        # Apply secrets if they exist
+        if [ -f "k8s/secrets.yaml" ]; then
+          kubectl apply -f k8s/secrets.yaml
+        else
+          echo "Warning: k8s/secrets.yaml not found. Please create it with your secrets."
+        fi
+        
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/ingress.yaml
+        
+    - name: Wait for Deployment
+      run: |
+        kubectl rollout status deployment/aircall-slack-service -n aircall-slack --timeout=300s
+        
+    - name: Verify Deployment
+      run: |
+        echo "=== Deployment Status ==="
+        kubectl get pods -n aircall-slack
+        
+        echo ""
+        echo "=== Service Status ==="
+        kubectl get services -n aircall-slack
+        
+        echo ""
+        echo "=== Load Balancer IP ==="
+        kubectl get service aircall-slack-loadbalancer -n aircall-slack -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || echo "Load balancer IP not yet available"
+        
+    - name: Health Check
+      run: |
+        # Wait a bit for the service to be ready
+        sleep 30
+        
+        # Get the load balancer IP
+        LB_IP=$(kubectl get service aircall-slack-loadbalancer -n aircall-slack -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+        
+        if [ -n "$LB_IP" ]; then
+          echo "Testing health endpoint at http://$LB_IP/health"
+          curl -f http://$LB_IP/health || echo "Health check failed"
+        else
+          echo "Load balancer IP not available yet"
+        fi 
