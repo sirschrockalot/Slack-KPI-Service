@@ -2,6 +2,20 @@
 
 A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service can run on-demand via API endpoints or be triggered by external schedulers.
 
+## 🚀 Deployment
+
+This service can be deployed to Google Kubernetes Engine (GKE) using our infrastructure as code repository:
+
+**Infrastructure Repository**: [gks_infra_as_code](https://github.com/YOUR_USERNAME/gks_infra_as_code)
+
+The infrastructure repository contains:
+- Terraform configuration for GKE cluster
+- Kubernetes manifests for deployment
+- CI/CD pipelines with GitHub Actions
+- Deployment scripts and documentation
+
+For deployment instructions, see the [README-GKE.md](https://github.com/YOUR_USERNAME/gks_infra_as_code/blob/main/README-GKE.md) in the infrastructure repository.
+
 ## Features
 
 - 🔄 **On-demand reporting** - Generate reports via API endpoints
