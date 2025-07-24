@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aircall-slack-service
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aircall-slack-service
+  template:
+    metadata:
+      labels:
+        app: aircall-slack-service
+    spec:
+      containers:
+      - name: aircall-slack-service
+        image: gcr.io/PROJECT_ID/aircall-slack-service:latest
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: PORT
+          value: "3000"
+        - name: NODE_ENV
+          value: "production"
+        # Add your environment variables here
+        # Example:
+        # - name: AIRCALL_API_KEY
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aircall-slack-secrets
+        #       key: aircall-api-key
+        # - name: SLACK_WEBHOOK_URL
+        #   valueFrom:
+        #     secretKeyRef:
+        #       name: aircall-slack-secrets
+        #       key: slack-webhook-url
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aircall-slack-service
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: aircall-slack-service

@@ -1,0 +1,16 @@
+# Copy this file to terraform.tfvars and update with your actual values
+
+# Your GCP Project ID
+project_id = "your-gcp-project-id"
+
+# GCP Region (choose closest to your users for better performance)
+region = "us-central1"
+
+# Cluster name
+cluster_name = "aircall-slack-cluster"
+
+# Number of nodes (1 for minimum cost)
+gke_num_nodes = 1
+
+# Machine type (e2-small is cost-optimized)
+node_machine_type = "e2-small"

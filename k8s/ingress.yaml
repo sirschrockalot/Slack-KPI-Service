@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aircall-slack-ingress
+  namespace: aircall-slack
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    kubernetes.io/ingress.global-static-ip-name: "aircall-slack-ip"
+    networking.gke.io/managed-certificates: "aircall-slack-ssl-cert"
+    kubernetes.io/ingress.allow-http: "false"
+spec:
+  rules:
+  - host: your-domain.com  # Replace with your actual domain
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: aircall-slack-ssl-cert
+  namespace: aircall-slack
+spec:
+  domains:
+    - your-domain.com  # Replace with your actual domain
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aircall-slack-loadbalancer
+  namespace: aircall-slack
+  annotations:
+    cloud.google.com/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 3000
+    protocol: TCP
+    name: http
+  selector:
+    app: aircall-slack-service
