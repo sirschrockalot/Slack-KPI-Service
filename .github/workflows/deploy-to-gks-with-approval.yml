@@ -1,4 +1,4 @@
-name: Deploy to GKS
+name: Deploy to GKS (with Approval)
 
 on:
   push:
@@ -7,14 +7,14 @@ on:
       - '**.js'
       - '**.json'
       - 'Dockerfile'
-      - '.github/workflows/deploy-to-gks.yml'
+      - '.github/workflows/deploy-to-gks-with-approval.yml'
   pull_request:
     branches: [main]
     paths:
       - '**.js'
       - '**.json'
       - 'Dockerfile'
-      - '.github/workflows/deploy-to-gks.yml'
+      - '.github/workflows/deploy-to-gks-with-approval.yml'
   workflow_dispatch: # Allow manual triggering
 
 env:
@@ -24,10 +24,12 @@ env:
   IMAGE_NAME: aircall-slack-service
 
 jobs:
-  deploy:
-    name: Deploy to GKS
+  # Job 1: Build and prepare for deployment
+  build:
+    name: Build and Prepare
     runs-on: ubuntu-latest
-    environment: production
+    outputs:
+      image-tag: ${{ steps.build.outputs.image-tag }}
     
     steps:
     - name: Checkout Code
@@ -47,13 +49,8 @@ jobs:
     - name: Configure Docker for GCR
       run: gcloud auth configure-docker
       
-    - name: Get GKS Credentials
-      run: |
-        gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
-          --region ${{ env.CLUSTER_REGION }} \
-          --project ${{ env.PROJECT_ID }}
-          
     - name: Build and Push Docker Image
+      id: build
       run: |
         # Build the image with commit SHA and latest tags
         docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
@@ -63,6 +60,71 @@ jobs:
         docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
         docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:latest
         
+        # Set output for next job
+        echo "image-tag=${{ github.sha }}" >> $GITHUB_OUTPUT
+        
+    - name: Create Deployment Summary
+      run: |
+        echo "## 🚀 Deployment Ready for Approval" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Image Built:** gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Author:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Changes to be deployed:" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        git log --oneline -10 >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # Job 2: Manual approval step
+  approve:
+    name: Manual Approval
+    runs-on: ubuntu-latest
+    needs: build
+    environment: production
+    
+    steps:
+    - name: Wait for Approval
+      run: |
+        echo "✅ Manual approval received!"
+        echo "Proceeding with deployment to GKS cluster..."
+        
+    - name: Deployment Summary
+      run: |
+        echo "## ✅ Approved for Deployment" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Approved by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Approved at:** $(date)" >> $GITHUB_STEP_SUMMARY
+        echo "**Image:** gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+
+  # Job 3: Deploy to GKS (only after approval)
+  deploy:
+    name: Deploy to GKS
+    runs-on: ubuntu-latest
+    needs: [build, approve]
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Authenticate to Google Cloud
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: ${{ secrets.GCP_SA_KEY }}
+        
+    - name: Setup Google Cloud CLI
+      uses: google-github-actions/setup-gcloud@v2
+      with:
+        project_id: ${{ env.PROJECT_ID }}
+        
+    - name: Get GKS Credentials
+      run: |
+        gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
+          --region ${{ env.CLUSTER_REGION }} \
+          --project ${{ env.PROJECT_ID }}
+          
     - name: Create Kubernetes Manifests
       run: |
         # Create namespace
@@ -96,7 +158,7 @@ jobs:
             spec:
               containers:
               - name: aircall-slack-service
-                image: gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+                image: gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}
                 ports:
                 - containerPort: 3000
                   name: http
@@ -174,6 +236,23 @@ jobs:
       run: |
         kubectl rollout status deployment/aircall-slack-service -n aircall-slack --timeout=300s
         
+    - name: Get Service URL
+      id: deploy
+      run: |
+        # Wait a bit for the load balancer to be ready
+        sleep 30
+        
+        # Get the load balancer IP
+        LB_IP=$(kubectl get service aircall-slack-loadbalancer -n aircall-slack -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
+        
+        if [ -n "$LB_IP" ]; then
+          echo "url=http://$LB_IP" >> $GITHUB_OUTPUT
+          echo "Service URL: http://$LB_IP"
+        else
+          echo "url=http://pending" >> $GITHUB_OUTPUT
+          echo "Load balancer IP not yet available"
+        fi
+        
     - name: Verify Deployment
       run: |
         echo "=== Deployment Status ==="
@@ -200,4 +279,13 @@ jobs:
           curl -f http://$LB_IP/health || echo "Health check failed"
         else
           echo "Load balancer IP not available yet"
-        fi 
+        fi
+        
+    - name: Deployment Complete
+      run: |
+        echo "## 🎉 Deployment Complete!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ✅ Successfully deployed to GKS" >> $GITHUB_STEP_SUMMARY
+        echo "**Image:** gcr.io/${{ env.PROJECT_ID }}/${{ env.IMAGE_NAME }}:${{ needs.build.outputs.image-tag }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Service URL:** ${{ steps.deploy.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployed at:** $(date)" >> $GITHUB_STEP_SUMMARY 
