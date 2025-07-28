@@ -1,74 +1,119 @@
 version: '3.8'
 
 services:
+  # Main application
   aircall-slack-agent:
-    build: 
-      context: .
-      dockerfile: Dockerfile
-    container_name: aircall-slack-agent
+    build: .
     ports:
-      - "${PORT:-3000}:3000"
+      - "3000:3000"
     environment:
-      # Aircall API Configuration
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/aircall-slack-agent
       - AIRCALL_API_ID=${AIRCALL_API_ID}
       - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
-      
-      # Slack Configuration
       - SLACK_API_TOKEN=${SLACK_API_TOKEN}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
-      
-      # Application Configuration
-      - PORT=${PORT:-3000}
-      - NODE_ENV=${NODE_ENV:-production}
-      - EXCLUDED_USERS=${EXCLUDED_USERS:-Joel Schrock}
       - JWT_SECRET=${JWT_SECRET}
-      
-      # Timezone (adjust as needed)
-      - TZ=${TZ:-America/Chicago}
-
-      # MongoDB Configuration
-      - MONGODB_URI=${MONGODB_URI}
-    
-    volumes:
-      # Persist logs outside container
-      - ./logs:/app/logs
-      
-    restart: unless-stopped
-    
-    # Resource limits
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.1'
-          memory: 128M
-    
-    # Health check
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    
-    # Logging configuration
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    
-    # Network configuration
+      - EXCLUDED_USERS=${EXCLUDED_USERS}
+    depends_on:
+      - mongodb
     networks:
-      - aircall-network
+      - app-network
+
+  # MongoDB
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+  # Monitoring services (optional - use profiles)
+  prometheus:
+    profiles: ["monitoring"]
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - app-network
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - app-network
+
+  alertmanager:
+    profiles: ["monitoring"]
+    image: prom/alertmanager:latest
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - app-network
+
+  node-exporter:
+    profiles: ["monitoring"]
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - app-network
+
+  cadvisor:
+    profiles: ["monitoring"]
+    image: gcr.io/cadvisor/cadvisor:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    privileged: true
+    networks:
+      - app-network
+
+volumes:
+  mongodb_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
 
 networks:
-  aircall-network:
+  app-network:
     driver: bridge
-
-# Optional: Add a volume for persistent logs
-volumes:
-  aircall-logs:
-    driver: local

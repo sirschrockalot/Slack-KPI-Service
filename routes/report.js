@@ -6,7 +6,35 @@ const Report = require('../models/Report');
 module.exports = (logger, generateReport, slackService) => {
   const router = express.Router();
 
-  // Afternoon report
+  /**
+   * @swagger
+   * /report/afternoon:
+   *   post:
+   *     summary: Generate and send afternoon report
+   *     description: Triggers the generation and sending of an afternoon activity report to Slack
+   *     tags: [Reports]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Report sent successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   router.post('/report/afternoon', async (req, res) => {
     try {
       logger.info('Afternoon report triggered via API');
@@ -39,7 +67,35 @@ module.exports = (logger, generateReport, slackService) => {
     }
   });
 
-  // Night report
+  /**
+   * @swagger
+   * /report/night:
+   *   post:
+   *     summary: Generate and send night report
+   *     description: Triggers the generation and sending of a night activity report to Slack
+   *     tags: [Reports]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Report sent successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   router.post('/report/night', async (req, res) => {
     try {
       logger.info('Night report triggered via API');
@@ -51,7 +107,55 @@ module.exports = (logger, generateReport, slackService) => {
     }
   });
 
-  // Custom report
+  /**
+   * @swagger
+   * /report/custom:
+   *   post:
+   *     summary: Generate and send custom time range report
+   *     description: Triggers the generation and sending of a custom time range activity report to Slack
+   *     tags: [Reports]
+   *     security:
+   *       - bearerAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/CustomReportRequest'
+   *     responses:
+   *       200:
+   *         description: Report sent successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       400:
+   *         description: Bad request - validation error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: false
+   *                 errors:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   router.post(
     '/report/custom',
     [
@@ -76,7 +180,35 @@ module.exports = (logger, generateReport, slackService) => {
     }
   );
 
-  // Today's report (from start of day to now)
+  /**
+   * @swagger
+   * /report/today:
+   *   get:
+   *     summary: Generate today's report
+   *     description: Generates a report for the current day (from start of day to now)
+   *     tags: [Reports]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Report generated successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
   router.get('/report/today', async (req, res) => {
     try {
       logger.info("/report/today route called");

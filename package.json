@@ -21,7 +21,11 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.16.4",
     "node-cron": "^4.2.1",
-    "winston": "^3.11.0"
+    "winston": "^3.11.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.0",
+    "prom-client": "^13.2.0",
+    "express-prometheus-middleware": "^1.2.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

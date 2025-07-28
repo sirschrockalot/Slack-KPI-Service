@@ -1,0 +1,114 @@
+groups:
+  - name: aircall-slack-agent
+    rules:
+      # Service availability
+      - alert: ServiceDown
+        expr: up{job="aircall-slack-agent"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Aircall Slack Agent is down"
+          description: "The Aircall Slack Agent service has been down for more than 1 minute."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status_code=~"5.."}[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }} errors per second over the last 5 minutes."
+
+      # High response time
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }} seconds."
+
+      # Report generation failures
+      - alert: ReportGenerationFailures
+        expr: rate(report_generation_total{status="error"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Report generation failures detected"
+          description: "Report generation is failing at {{ $value }} failures per second."
+
+      # Slack message failures
+      - alert: SlackMessageFailures
+        expr: rate(slack_messages_sent_total{status="error"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slack message failures detected"
+          description: "Slack messages are failing to send at {{ $value }} failures per second."
+
+      # Aircall API failures
+      - alert: AircallAPIFailures
+        expr: rate(aircall_api_calls_total{status="error"}[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aircall API failures detected"
+          description: "Aircall API calls are failing at {{ $value }} failures per second."
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024) > 512
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is {{ $value }} MB."
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is {{ $value }}%."
+
+      # Event loop lag
+      - alert: EventLoopLag
+        expr: nodejs_eventloop_lag_seconds > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Event loop lag detected"
+          description: "Event loop lag is {{ $value }} seconds."
+
+  - name: infrastructure
+    rules:
+      # Node exporter down
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node Exporter is down"
+          description: "Node Exporter has been down for more than 1 minute."
+
+      # cAdvisor down
+      - alert: CAdvisorDown
+        expr: up{job="cadvisor"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cAdvisor is down"
+          description: "cAdvisor has been down for more than 1 minute." 

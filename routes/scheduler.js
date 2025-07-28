@@ -5,7 +5,39 @@ module.exports = function(logger, reportScheduler) {
   const router = express.Router();
 
   /**
-   * Get scheduler status
+   * @swagger
+   * /scheduler/status:
+   *   get:
+   *     summary: Get scheduler status
+   *     description: Returns the current status of the report scheduler
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Scheduler status retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   $ref: '#/components/schemas/SchedulerStatus'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.get('/scheduler/status', async (req, res) => {
     try {
@@ -21,7 +53,33 @@ module.exports = function(logger, reportScheduler) {
   });
 
   /**
-   * Start the scheduler
+   * @swagger
+   * /scheduler/start:
+   *   post:
+   *     summary: Start the scheduler
+   *     description: Starts the automated report scheduler
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Scheduler started successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.post('/scheduler/start', async (req, res) => {
     try {
@@ -37,7 +95,33 @@ module.exports = function(logger, reportScheduler) {
   });
 
   /**
-   * Stop the scheduler
+   * @swagger
+   * /scheduler/stop:
+   *   post:
+   *     summary: Stop the scheduler
+   *     description: Stops the automated report scheduler
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Scheduler stopped successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.post('/scheduler/stop', async (req, res) => {
     try {
@@ -53,7 +137,33 @@ module.exports = function(logger, reportScheduler) {
   });
 
   /**
-   * Manually trigger afternoon report
+   * @swagger
+   * /scheduler/trigger/afternoon:
+   *   post:
+   *     summary: Manually trigger afternoon report
+   *     description: Manually triggers the afternoon report generation and sending
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Afternoon report triggered successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.post('/scheduler/trigger/afternoon', async (req, res) => {
     try {
@@ -70,7 +180,33 @@ module.exports = function(logger, reportScheduler) {
   });
 
   /**
-   * Manually trigger night report
+   * @swagger
+   * /scheduler/trigger/night:
+   *   post:
+   *     summary: Manually trigger night report
+   *     description: Manually triggers the night report generation and sending
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Night report triggered successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.post('/scheduler/trigger/night', async (req, res) => {
     try {
@@ -87,7 +223,64 @@ module.exports = function(logger, reportScheduler) {
   });
 
   /**
-   * Get next scheduled run times
+   * @swagger
+   * /scheduler/next-runs:
+   *   get:
+   *     summary: Get next scheduled run times
+   *     description: Returns the next scheduled run times for afternoon and night reports
+   *     tags: [Scheduler]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Next run times retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: object
+   *                   properties:
+   *                     currentTime:
+   *                       type: string
+   *                       format: date-time
+   *                       example: '2024-01-01T12:00:00.000Z'
+   *                     afternoon:
+   *                       type: object
+   *                       properties:
+   *                         nextRun:
+   *                           type: string
+   *                           format: date-time
+   *                           example: '2024-01-01T14:00:00.000Z'
+   *                         timeUntilNext:
+   *                           type: number
+   *                           example: 7200000
+   *                     night:
+   *                       type: object
+   *                       properties:
+   *                         nextRun:
+   *                           type: string
+   *                           format: date-time
+   *                           example: '2024-01-01T22:00:00.000Z'
+   *                         timeUntilNext:
+   *                           type: number
+   *                           example: 36000000
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
    */
   router.get('/scheduler/next-runs', async (req, res) => {
     try {

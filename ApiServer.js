@@ -5,17 +5,16 @@ const helmet = require('helmet');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const winston = require('winston');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./swagger');
+const monitoring = require('./monitoring');
 const SlackService = require('./SlackService');
 const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
-const aircallDataCronJobRouter = require('./routes/aircallDataCronJob');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
-const HourlySyncService = require('./services/syncAircallHourly');
-const AggregateStatsService = require('./services/aggregateStats');
-const hourlyCallStatsRouter = require('./routes/hourlyCallStats');
 const ReportScheduler = require('./services/reportScheduler');
 const schedulerRouter = require('./routes/scheduler');
 
@@ -113,8 +112,6 @@ class ApiServer {
       this.config.excludedUsers
     );
 
-    this.hourlySyncService = new HourlySyncService(this.aircallService, this.logger);
-    
     // Initialize report scheduler
     const baseUrl = `http://localhost:${this.config.port}`;
     this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
@@ -136,8 +133,10 @@ class ApiServer {
       },
       credentials: true
     }));
+    
     // Security headers
     this.app.use(helmet());
+    
     // Rate limiting middleware (100 requests per 15 minutes per IP)
     const limiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
@@ -148,6 +147,10 @@ class ApiServer {
     this.app.use(limiter);
     
     this.app.use(express.json());
+    
+    // Monitoring middleware (must be before other middleware to capture all requests)
+    this.app.use(monitoring.prometheusMiddlewareConfig);
+    this.app.use(monitoring.customMetricsMiddleware);
     
     // Request logging middleware
     this.app.use((req, res, next) => {
@@ -193,10 +196,25 @@ class ApiServer {
    * Setup API routes
    */
   setupRoutes() {
+    // Swagger documentation
+    this.app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+      customCss: '.swagger-ui .topbar { display: none }',
+      customSiteTitle: 'Aircall Slack Agent API Documentation'
+    }));
+    
+    // Metrics endpoint
+    this.app.get('/metrics', async (req, res) => {
+      try {
+        res.set('Content-Type', monitoring.register.contentType);
+        res.end(await monitoring.register.metrics());
+      } catch (err) {
+        res.status(500).end(err);
+      }
+    });
+    
+    // API routes
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
-    this.app.use(aircallDataCronJobRouter(this.logger, this.generateReport.bind(this)));
-    this.app.use(hourlyCallStatsRouter(this.logger));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
     this.app.use(schedulerRouter(this.logger, this.reportScheduler));
   }
@@ -205,6 +223,7 @@ class ApiServer {
    * Generate and send a report
    */
   async generateReport(reportType, customStart = null, customEnd = null) {
+    const startTime = Date.now();
     try {
       // Get activity data from Aircall
       const activityData = await this.aircallService.getUserActivity(
@@ -217,8 +236,13 @@ class ApiServer {
         throw new Error('Failed to retrieve activity data from Aircall');
       }
       
+      const duration = (Date.now() - startTime) / 1000;
+      monitoring.recordReportGeneration(reportType, duration, 'success');
+      
       return activityData;
     } catch (error) {
+      const duration = (Date.now() - startTime) / 1000;
+      monitoring.recordReportGeneration(reportType, duration, 'error');
       this.logger.error(`Error generating ${reportType} report:`, error.message);
       throw error;
     }
@@ -257,12 +281,6 @@ class ApiServer {
       // Validate connections first
       await this.validateConnections();
       
-      // Schedule hourly sync job
-      cron.schedule('0 * * * *', () => {
-        this.logger.info('Triggering hourly Aircall data sync...');
-        this.hourlySyncService.syncCatchUp();
-      });
-
       // Start the Express server
       this.server = this.app.listen(this.config.port, '0.0.0.0', () => {
         this.logger.info(`Aircall Slack Agent API server started on port ${this.config.port}`);
@@ -281,14 +299,13 @@ class ApiServer {
         this.logger.info('  POST /scheduler/trigger/afternoon - Manually trigger afternoon report');
         this.logger.info('  POST /scheduler/trigger/night - Manually trigger night report');
         this.logger.info('  GET /scheduler/next-runs - Get next scheduled run times');
+        this.logger.info('  GET /api-docs - API documentation');
+        this.logger.info('  GET /metrics - Prometheus metrics');
         
         // Start the report scheduler
         this.logger.info('Starting report scheduler...');
         this.reportScheduler.start();
         
-        // Trigger catch-up sync immediately on startup
-        this.logger.info('Triggering catch-up sync on startup...');
-        this.hourlySyncService.syncCatchUp();
       });
       
       return this.server;

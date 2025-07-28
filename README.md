@@ -25,6 +25,9 @@ For deployment instructions, see the [README-GKE.md](https://github.com/YOUR_USE
 - 📝 **Comprehensive logging** - Winston-based logging with file and console output
 - 🌐 **RESTful API** - Clean API interface for external integrations
 - 🛡️ **Security** - Rate limiting, input validation, security headers, and JWT authentication
+- 📚 **API Documentation** - Interactive Swagger/OpenAPI documentation
+- 📊 **Monitoring & Observability** - Prometheus metrics, structured logging, and performance monitoring
+- ⏰ **Scheduled Reports** - Automated report generation with configurable schedules
 
 ## Security Features
 
@@ -131,6 +134,22 @@ npm start
 node index.js
 ```
 
+### API Documentation
+
+The service includes interactive API documentation powered by Swagger/OpenAPI 3.0.
+
+#### Access API Documentation
+Once the service is running, visit:
+```
+http://localhost:3000/api-docs
+```
+
+The documentation includes:
+- Interactive testing of all endpoints
+- Request/response schemas
+- Authentication requirements
+- Example requests and responses
+
 ### API Endpoints
 
 The service exposes the following endpoints:
@@ -146,6 +165,12 @@ Returns service health status. (No authentication required)
 GET /status
 ```
 Returns detailed service information and available endpoints. (No authentication required)
+
+#### Metrics
+```bash
+GET /metrics
+```
+Returns Prometheus metrics for monitoring. (No authentication required)
 
 #### Test Connections
 ```bash
@@ -245,18 +270,91 @@ aircall-slack-agent/
 ├── logs/                    # Log files directory
 │   ├── error.log           # Error logs
 │   └── combined.log        # All logs
+├── routes/                  # API route handlers
+│   ├── health.js           # Health check endpoints
+│   ├── report.js           # Report generation endpoints
+│   ├── scheduler.js        # Scheduler management endpoints
+│   └── testConnections.js  # Connection testing endpoints
+├── services/               # Business logic services
+│   └── reportScheduler.js  # Automated report scheduling
+├── models/                 # Database models
+│   ├── Report.js           # Report model
+│   └── SyncStatus.js       # Sync status tracking
+├── monitoring/             # Monitoring configuration
+│   ├── prometheus.yml      # Prometheus config
+│   ├── alert_rules.yml     # Alerting rules
+│   └── alertmanager.yml    # Alertmanager config
 └── README.md               # This file
 ```
 
-## Logging
+## Monitoring & Observability
 
-The application uses Winston for logging with the following outputs:
+The service includes comprehensive monitoring and observability features.
+
+### Metrics & Monitoring
+
+#### Prometheus Metrics
+The service exposes Prometheus metrics at `/metrics` for monitoring:
+
+- **System Metrics**: CPU, memory, event loop lag
+- **HTTP Metrics**: Request duration, throughput, error rates
+- **Business Metrics**: Report generation success, Slack message delivery, Aircall API calls
+- **Custom Metrics**: Scheduler execution, report types, performance indicators
+
+#### Monitoring Stack Setup
+Use Docker Compose profiles to start the monitoring stack:
+
+```bash
+# Start just the main application
+docker-compose up -d
+
+# Start application with monitoring stack
+docker-compose --profile monitoring up -d
+
+# Start only monitoring stack (if app is running separately)
+docker-compose --profile monitoring up -d
+```
+
+This includes:
+- **Prometheus**: Metrics collection and alerting
+- **Grafana**: Dashboards and visualization
+- **Alertmanager**: Alert routing and notification
+- **Node Exporter**: System metrics
+- **cAdvisor**: Container metrics
+
+Access the monitoring tools:
+- Prometheus: http://localhost:9090
+- Grafana: http://localhost:3001 (admin/admin)
+- Alertmanager: http://localhost:9093
+
+### Logging
+
+The application uses Winston for structured logging with the following outputs:
 
 - **Console**: Colored, simple format for development
 - **File**: JSON format in `logs/combined.log`
 - **Error File**: Error-level logs in `logs/error.log`
 
 Log levels: `error`, `warn`, `info`, `debug`
+
+### Health Checks
+
+The service provides multiple health check endpoints:
+
+- `/health`: Basic service health
+- `/status`: Detailed service status and configuration
+- `/metrics`: Prometheus metrics endpoint
+
+### Performance Monitoring
+
+Key metrics to monitor:
+- **Response Time**: Target < 2 seconds (95th percentile)
+- **Error Rate**: Target < 1%
+- **Report Generation Time**: Target < 30 seconds
+- **Memory Usage**: Monitor for leaks
+- **CPU Usage**: Monitor for bottlenecks
+
+For detailed monitoring setup and configuration, see [MONITORING-GUIDE.md](MONITORING-GUIDE.md).
 
 ## GitHub Actions Integration
 
