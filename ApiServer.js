@@ -278,8 +278,14 @@ class ApiServer {
    */
   async start() {
     try {
-      // Validate connections first
-      await this.validateConnections();
+      // Try to validate connections, but don't fail if they don't work
+      try {
+        await this.validateConnections();
+        this.logger.info('All service connections validated successfully');
+      } catch (validationError) {
+        this.logger.warn('Service connection validation failed, but continuing startup:', validationError.message);
+        this.logger.warn('The service will start but some features may not work without valid credentials');
+      }
       
       // Start the Express server
       this.server = this.app.listen(this.config.port, '0.0.0.0', () => {

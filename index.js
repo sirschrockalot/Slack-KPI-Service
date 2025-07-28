@@ -1,3 +1,6 @@
+// Load environment variables from .env file
+require('dotenv').config();
+
 const ApiServer = require('./ApiServer');
 const winston = require('winston');
 const fs = require('fs');
@@ -50,6 +53,7 @@ async function startApplication() {
     
   } catch (error) {
     logger.error('❌ Failed to start Aircall Slack Agent:', error.message);
+    logger.error('Error details:', error.stack);
     process.exit(1);
   }
 }

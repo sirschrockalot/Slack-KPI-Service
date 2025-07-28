@@ -7,19 +7,7 @@ const register = new promClient.Registry();
 // Add default metrics (CPU, memory, etc.)
 promClient.collectDefaultMetrics({ register });
 
-// Custom metrics
-const httpRequestDurationMicroseconds = new promClient.Histogram({
-  name: 'http_request_duration_seconds',
-  help: 'Duration of HTTP requests in seconds',
-  labelNames: ['method', 'route', 'status_code'],
-  buckets: [0.1, 0.5, 1, 2, 5]
-});
 
-const httpRequestsTotal = new promClient.Counter({
-  name: 'http_requests_total',
-  help: 'Total number of HTTP requests',
-  labelNames: ['method', 'route', 'status_code']
-});
 
 const reportGenerationDuration = new promClient.Histogram({
   name: 'report_generation_duration_seconds',
@@ -52,9 +40,7 @@ const schedulerRuns = new promClient.Counter({
   labelNames: ['report_type', 'status']
 });
 
-// Register all metrics
-register.registerMetric(httpRequestDurationMicroseconds);
-register.registerMetric(httpRequestsTotal);
+// Register custom business metrics
 register.registerMetric(reportGenerationDuration);
 register.registerMetric(reportGenerationTotal);
 register.registerMetric(slackMessageSent);
@@ -64,7 +50,7 @@ register.registerMetric(schedulerRuns);
 // Prometheus middleware configuration
 const prometheusMiddlewareConfig = prometheusMiddleware({
   metricsPath: '/metrics',
-  collectDefaultMetrics: false, // We're collecting them manually
+  collectDefaultMetrics: true, // Let the middleware handle default metrics
   requestDurationBuckets: [0.1, 0.5, 1, 2, 5],
   requestLengthBuckets: [512, 1024, 5120, 10240, 51200],
   responseLengthBuckets: [512, 1024, 5120, 10240, 51200],
@@ -75,23 +61,10 @@ const prometheusMiddlewareConfig = prometheusMiddleware({
   }
 });
 
-// Custom middleware for additional metrics
+// Custom middleware for additional business metrics
 const customMetricsMiddleware = (req, res, next) => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = (Date.now() - start) / 1000; // Convert to seconds
-    
-    // Record request duration
-    httpRequestDurationMicroseconds
-      .labels(req.method, req.route?.path || req.path, res.statusCode)
-      .observe(duration);
-    
-    // Increment request counter
-    httpRequestsTotal
-      .labels(req.method, req.route?.path || req.path, res.statusCode)
-      .inc();
-  });
+  // This middleware can be used for custom business logic metrics
+  // The express-prometheus-middleware handles HTTP metrics automatically
   
   next();
 };
@@ -123,8 +96,6 @@ module.exports = {
   recordAircallApiCall,
   recordSchedulerRun,
   metrics: {
-    httpRequestDurationMicroseconds,
-    httpRequestsTotal,
     reportGenerationDuration,
     reportGenerationTotal,
     slackMessageSent,
