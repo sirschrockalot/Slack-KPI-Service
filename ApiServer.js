@@ -112,9 +112,9 @@ class ApiServer {
       this.config.excludedUsers
     );
 
-    // Initialize report scheduler
+    // Initialize report scheduler with direct report generator
     const baseUrl = `http://localhost:${this.config.port}`;
-    this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
+    this.reportScheduler = new ReportScheduler(baseUrl, this.logger, this.generateReport.bind(this));
   }
   
   /**
