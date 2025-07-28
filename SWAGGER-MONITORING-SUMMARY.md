@@ -136,6 +136,8 @@ docker-compose --profile monitoring up -d
 docker-compose --profile monitoring up -d
 ```
 
+**Note:** The application requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable.
+
 Access monitoring tools:
 - Prometheus: http://localhost:9090
 - Grafana: http://localhost:3001 (admin/admin)
@@ -145,7 +147,12 @@ Access monitoring tools:
 
 ### Environment Variables
 
-No new environment variables are required. The existing configuration works with the new features.
+The service requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable. No local MongoDB installation is needed.
+
+Example:
+```env
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/aircall-slack-agent?retryWrites=true&w=majority
+```
 
 ### Monitoring Configuration
 

@@ -8,27 +8,17 @@ services:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-      - MONGODB_URI=mongodb://mongodb:27017/aircall-slack-agent
+      - MONGODB_URI=${MONGODB_URI}
       - AIRCALL_API_ID=${AIRCALL_API_ID}
       - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
       - SLACK_API_TOKEN=${SLACK_API_TOKEN}
       - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
       - JWT_SECRET=${JWT_SECRET}
       - EXCLUDED_USERS=${EXCLUDED_USERS}
-    depends_on:
-      - mongodb
     networks:
       - app-network
 
-  # MongoDB
-  mongodb:
-    image: mongo:6.0
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - app-network
+
 
   # Monitoring services (optional - use profiles)
   prometheus:
@@ -109,7 +99,6 @@ services:
       - app-network
 
 volumes:
-  mongodb_data:
   prometheus_data:
   grafana_data:
   alertmanager_data:

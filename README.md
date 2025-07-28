@@ -68,6 +68,9 @@ For deployment instructions, see the [README-GKE.md](https://github.com/YOUR_USE
 Create a `.env` file in the root directory with the following variables:
 
 ```env
+# MongoDB Atlas Configuration
+MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/aircall-slack-agent?retryWrites=true&w=majority
+
 # Aircall API Configuration
 AIRCALL_API_ID=your_aircall_api_id
 AIRCALL_API_TOKEN=your_aircall_api_token
@@ -114,6 +117,19 @@ INPUT_EXCLUDED_USERS=Joel Schrock,Another User
 1. Open Slack in your browser
 2. Navigate to the target channel
 3. Copy the channel ID from the URL (e.g., `C1234567890`)
+
+#### MongoDB Atlas Setup
+1. Create a free MongoDB Atlas account at [mongodb.com](https://www.mongodb.com/atlas)
+2. Create a new cluster (M0 Free tier is sufficient for development)
+3. Create a database user with read/write permissions
+4. Get your connection string from the "Connect" button
+5. Replace `username`, `password`, and `cluster` in the connection string
+6. Add the connection string to your `.env` file as `MONGODB_URI`
+
+Example connection string:
+```
+mongodb+srv://yourusername:yourpassword@cluster0.xxxxx.mongodb.net/aircall-slack-agent?retryWrites=true&w=majority
+```
 
 ## Usage
 
@@ -287,6 +303,9 @@ aircall-slack-agent/
 └── README.md               # This file
 ```
 
+**Note:** This service uses MongoDB Atlas for database storage. No local MongoDB installation is required.
+```
+
 ## Monitoring & Observability
 
 The service includes comprehensive monitoring and observability features.
@@ -305,7 +324,7 @@ The service exposes Prometheus metrics at `/metrics` for monitoring:
 Use Docker Compose profiles to start the monitoring stack:
 
 ```bash
-# Start just the main application
+# Start just the main application (requires MongoDB Atlas connection)
 docker-compose up -d
 
 # Start application with monitoring stack
@@ -316,11 +335,14 @@ docker-compose --profile monitoring up -d
 ```
 
 This includes:
+- **Main Application**: Aircall Slack Agent (connects to MongoDB Atlas)
 - **Prometheus**: Metrics collection and alerting
 - **Grafana**: Dashboards and visualization
 - **Alertmanager**: Alert routing and notification
 - **Node Exporter**: System metrics
 - **cAdvisor**: Container metrics
+
+**Note:** The application requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable.
 
 Access the monitoring tools:
 - Prometheus: http://localhost:9090

@@ -7,6 +7,7 @@ echo "🚀 Starting Aircall Slack Agent with Monitoring Features..."
 if [ ! -f .env ]; then
     echo "⚠️  Warning: .env file not found. Please create one with your configuration."
     echo "   You can copy .env.example and fill in your values."
+    echo "   Make sure to include your MongoDB Atlas connection string in MONGODB_URI."
 fi
 
 # Create logs directory if it doesn't exist
