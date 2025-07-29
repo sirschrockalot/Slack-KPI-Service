@@ -81,8 +81,8 @@ class ReportScheduler {
         await this.reportGenerator('afternoon');
         this.logger.info('✅ Afternoon report completed successfully');
       } else {
-        // Fallback to HTTP request
-        const response = await axios.post(`${this.baseUrl}/report/afternoon`, {}, {
+        // Use scheduler trigger endpoint
+        const response = await axios.post(`${this.baseUrl}/scheduler/trigger/afternoon`, {}, {
           timeout: 30000, // 30 second timeout
           headers: {
             'Content-Type': 'application/json'
@@ -117,8 +117,8 @@ class ReportScheduler {
         await this.reportGenerator('night');
         this.logger.info('✅ Night report completed successfully');
       } else {
-        // Fallback to HTTP request
-        const response = await axios.post(`${this.baseUrl}/report/night`, {}, {
+        // Use scheduler trigger endpoint
+        const response = await axios.post(`${this.baseUrl}/scheduler/trigger/night`, {}, {
           timeout: 30000, // 30 second timeout
           headers: {
             'Content-Type': 'application/json'

@@ -99,8 +99,29 @@ module.exports = (logger, generateReport, slackService) => {
   router.post('/report/night', async (req, res) => {
     try {
       logger.info('Night report triggered via API');
-      await generateReport('night');
-      res.json({ success: true, message: 'Night report sent successfully' });
+      const data = await generateReport('night');
+      
+      // Debug: Log the data structure to see if users have unique data
+      logger.info('DEBUG: Raw activity data structure:', {
+        period: data.period,
+        userCount: data.users ? data.users.length : 0,
+        users: data.users ? data.users.map(u => ({
+          name: u.name,
+          user_id: u.user_id,
+          totalCalls: u.totalCalls,
+          answeredCalls: u.answeredCalls,
+          totalDurationMinutes: u.totalDurationMinutes
+        })) : []
+      });
+      
+      const sent = await slackService.sendActivityReport(data);
+      if (sent) {
+        logger.info('Night report sent to Slack successfully');
+        res.json({ success: true, message: 'Night report sent to Slack successfully' });
+      } else {
+        logger.error('Failed to send night report to Slack');
+        res.status(500).json({ success: false, error: 'Failed to send night report to Slack' });
+      }
     } catch (error) {
       logger.error('Error running night report:', error.message);
       res.status(500).json({ success: false, error: error.message });

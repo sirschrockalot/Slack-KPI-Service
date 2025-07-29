@@ -112,9 +112,9 @@ class ApiServer {
       this.config.excludedUsers
     );
 
-    // Initialize report scheduler with direct report generator
+    // Initialize report scheduler
     const baseUrl = `http://localhost:${this.config.port}`;
-    this.reportScheduler = new ReportScheduler(baseUrl, this.logger, this.generateReport.bind(this));
+    this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
   }
   
   /**
@@ -216,7 +216,7 @@ class ApiServer {
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
-    this.app.use(schedulerRouter(this.logger, this.reportScheduler));
+    this.app.use(schedulerRouter(this.logger, this.reportScheduler, this.generateReport.bind(this), this.slackService));
   }
   
   /**

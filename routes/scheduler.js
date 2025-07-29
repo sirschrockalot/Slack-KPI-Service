@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 
-module.exports = function(logger, reportScheduler) {
+module.exports = function(logger, reportScheduler, generateReport, slackService) {
   const router = express.Router();
 
   /**
@@ -168,11 +168,22 @@ module.exports = function(logger, reportScheduler) {
   router.post('/scheduler/trigger/afternoon', async (req, res) => {
     try {
       logger.info('Manual afternoon report trigger requested');
-      await reportScheduler.triggerAfternoonReport();
-      res.json({
-        success: true,
-        message: 'Afternoon report triggered successfully'
-      });
+      
+      // Generate report data
+      const data = await generateReport('afternoon');
+      
+      // Send to Slack
+      const sent = await slackService.sendActivityReport(data);
+      if (sent) {
+        logger.info('Afternoon report sent to Slack successfully');
+        res.json({
+          success: true,
+          message: 'Afternoon report sent to Slack successfully'
+        });
+      } else {
+        logger.error('Failed to send afternoon report to Slack');
+        res.status(500).json({ success: false, error: 'Failed to send afternoon report to Slack' });
+      }
     } catch (error) {
       logger.error('Error triggering afternoon report:', error.message);
       res.status(500).json({ success: false, error: error.message });
@@ -211,11 +222,22 @@ module.exports = function(logger, reportScheduler) {
   router.post('/scheduler/trigger/night', async (req, res) => {
     try {
       logger.info('Manual night report trigger requested');
-      await reportScheduler.triggerNightReport();
-      res.json({
-        success: true,
-        message: 'Night report triggered successfully'
-      });
+      
+      // Generate report data
+      const data = await generateReport('night');
+      
+      // Send to Slack
+      const sent = await slackService.sendActivityReport(data);
+      if (sent) {
+        logger.info('Night report sent to Slack successfully');
+        res.json({
+          success: true,
+          message: 'Night report sent to Slack successfully'
+        });
+      } else {
+        logger.error('Failed to send night report to Slack');
+        res.status(500).json({ success: false, error: 'Failed to send night report to Slack' });
+      }
     } catch (error) {
       logger.error('Error triggering night report:', error.message);
       res.status(500).json({ success: false, error: error.message });
