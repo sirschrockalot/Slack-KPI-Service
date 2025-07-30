@@ -168,11 +168,11 @@ class AircallService {
       endTime = new Date(now);
       endTime.setHours(13, 0, 0, 0);
     } else { // night
-      // 1:01PM CST to 7:30PM CST
+      // 7AM CST to 7PM CST (entire day)
       startTime = new Date(now);
-      startTime.setHours(13, 1, 0, 0);
+      startTime.setHours(7, 0, 0, 0);
       endTime = new Date(now);
-      endTime.setHours(19, 30, 0, 0);
+      endTime.setHours(19, 0, 0, 0);
     }
     
     return {
@@ -247,8 +247,11 @@ class AircallService {
       // Get all users
       const users = await this.getUsers();
       
+      // Use more descriptive period name for night report (entire day)
+      const periodName = timePeriod === 'night' ? 'Daily' : timePeriod;
+      
       const activitySummary = {
-        period: timePeriod,
+        period: periodName,
         startTime: timeRange.startTime.toISOString(),
         endTime: timeRange.endTime.toISOString(),
         users: []

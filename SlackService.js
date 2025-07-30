@@ -104,13 +104,14 @@ class SlackService {
     const totalInboundCalls = activityData.users.reduce((sum, user) => sum + (user.inboundCalls || 0), 0);
     const totalAnsweredInbound = activityData.users.reduce((sum, user) => sum + (user.answeredInboundCalls || 0), 0);
     
-    // Create header
+    // Create header with custom title for Daily reports
+    const reportTitle = period === 'Daily' ? 'End of Day Report' : period;
     const blocks = [
       {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `📞 Call Activity Report - ${period}`
+          text: `📞 Call Activity Report - ${reportTitle}`
         }
       },
       {
