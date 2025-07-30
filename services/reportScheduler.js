@@ -33,15 +33,15 @@ class ReportScheduler {
   start() {
     this.logger.info('Starting report scheduler...');
     
-    // Schedule afternoon report: Weekdays at 1:01 PM CST (19:01 UTC)
-    this.afternoonJob = cron.schedule('1 19 * * 1-5', () => {
+    // Schedule afternoon report: Weekdays at 1:01 PM CST/CDT
+    this.afternoonJob = cron.schedule('1 13 * * 1-5', () => {
       this.runAfternoonReport();
     }, {
       timezone: 'America/Chicago'
     });
     
-    // Schedule night report: Weekdays at 6:30 PM CST (00:30 UTC next day)
-    this.nightJob = cron.schedule('30 0 * * 2-6', () => {
+    // Schedule night report: Weekdays at 6:30 PM CST/CDT
+    this.nightJob = cron.schedule('30 18 * * 1-5', () => {
       this.runNightReport();
     }, {
       timezone: 'America/Chicago'
@@ -149,11 +149,11 @@ class ReportScheduler {
       running: !!(this.afternoonJob && this.nightJob),
       afternoonJob: {
         scheduled: !!this.afternoonJob,
-        nextRun: this.afternoonJob ? this.getNextRunTime('1 19 * * 1-5', 'America/Chicago') : null
+        nextRun: this.afternoonJob ? this.getNextRunTime('1 13 * * 1-5', 'America/Chicago') : null
       },
       nightJob: {
         scheduled: !!this.nightJob,
-        nextRun: this.nightJob ? this.getNextRunTime('30 0 * * 2-6', 'America/Chicago') : null
+        nextRun: this.nightJob ? this.getNextRunTime('30 18 * * 1-5', 'America/Chicago') : null
       }
     };
   }
@@ -163,17 +163,15 @@ class ReportScheduler {
    */
   getNextRunTime(cronExpression, timezone) {
     try {
-      // Simple calculation for the specific cron expressions we use
+      // Use proper timezone-aware calculation
       const now = new Date();
-      const cstOffset = -6; // CST is UTC-6
-      const nowCST = new Date(now.getTime() + (cstOffset * 60 * 60 * 1000));
       
-      if (cronExpression === '1 19 * * 1-5') {
-        // Afternoon report: Weekdays at 1:01 PM CST (19:01 UTC)
-        return this.getNextWeekdayTime(nowCST, 13, 1); // 1:01 PM CST
-      } else if (cronExpression === '30 0 * * 2-6') {
-        // Night report: Weekdays at 6:30 PM CST (00:30 UTC next day)
-        return this.getNextWeekdayTime(nowCST, 18, 30); // 6:30 PM CST
+      if (cronExpression === '1 13 * * 1-5') {
+        // Afternoon report: Weekdays at 1:01 PM CST/CDT
+        return this.getNextWeekdayTimeInTimezone(now, 13, 1, 'America/Chicago');
+      } else if (cronExpression === '30 18 * * 1-5') {
+        // Night report: Weekdays at 6:30 PM CST/CDT
+        return this.getNextWeekdayTimeInTimezone(now, 18, 30, 'America/Chicago');
       }
       
       return null;
@@ -184,7 +182,33 @@ class ReportScheduler {
   }
 
   /**
-   * Get next weekday time for a specific hour and minute
+   * Get next weekday time for a specific hour and minute in a specific timezone
+   */
+  getNextWeekdayTimeInTimezone(now, hour, minute, timezone) {
+    // Create a date in the target timezone
+    const targetDate = new Date();
+    const targetTime = new Date(targetDate.toLocaleString("en-US", {timeZone: timezone}));
+    
+    // Set the target hour and minute
+    targetTime.setHours(hour, minute, 0, 0);
+    
+    // If the time has passed today, move to next weekday
+    if (targetTime <= targetDate) {
+      targetTime.setDate(targetTime.getDate() + 1);
+    }
+    
+    // Move to next weekday if current day is weekend
+    while (targetTime.getDay() === 0 || targetTime.getDay() === 6) {
+      targetTime.setDate(targetTime.getDate() + 1);
+    }
+    
+    // Convert to UTC for storage
+    const utcTime = new Date(targetTime.toLocaleString("en-US", {timeZone: "UTC"}));
+    return utcTime.toISOString();
+  }
+
+  /**
+   * Get next weekday time for a specific hour and minute (legacy method)
    */
   getNextWeekdayTime(now, hour, minute) {
     const nextRun = new Date(now);

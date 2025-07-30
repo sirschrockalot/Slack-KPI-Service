@@ -113,7 +113,7 @@ class ApiServer {
     );
 
     // Initialize report scheduler
-    const baseUrl = `http://localhost:${this.config.port}`;
+    const baseUrl = `http://0.0.0.0:${this.config.port}`;
     this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
   }
   
