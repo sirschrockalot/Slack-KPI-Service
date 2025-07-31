@@ -111,7 +111,7 @@ class SlackService {
         type: 'header',
         text: {
           type: 'plain_text',
-          text: `📞 Call Activity Report - ${reportTitle}`
+          text: `📊 Call Activity Report - ${reportTitle}`
         }
       },
       {
@@ -127,14 +127,14 @@ class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `📊 *Outbound Summary:* ${totalOutboundCalls} calls • ${totalAnsweredOutbound} answered • ${answerRate}% answer rate`
+          text: `📤 *Outbound Summary:* ${totalOutboundCalls} calls • ${totalAnsweredOutbound} answered • ${answerRate}% answer rate`
         }
       },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `📞 *Inbound Summary:* ${totalInboundCalls} calls • ${totalAnsweredInbound} answered • ${Math.round(totalTalkTime)} min total talk time`
+          text: `📥 *Inbound Summary:* ${totalInboundCalls} calls • ${totalAnsweredInbound} answered • ${Math.round(totalTalkTime)} min total talk time`
         }
       },
       {
@@ -147,26 +147,31 @@ class SlackService {
     
     // Add KPI summary for end of day report
     if (period === 'Daily') {
-      const kpiOutboundCalls = 60;
-      const kpiTalkTimeMinutes = 120;
+      const kpiOutboundCalls = 80; // Updated to 80 outbound calls
+      const kpiTalkTimeMinutes = 120; // 2 hours
       
-      const usersNotMeetingKPIs = sortedUsers.filter(user => 
-        user.totalCalls < kpiOutboundCalls || user.totalDurationMinutes < kpiTalkTimeMinutes
-      );
+      // New KPI logic: Only flag if under 2 hours AND under 80 outbound calls
+      const usersNotMeetingKPIs = sortedUsers.filter(user => {
+        const hasEnoughTalkTime = user.totalDurationMinutes >= kpiTalkTimeMinutes;
+        const hasEnoughOutboundCalls = user.totalCalls >= kpiOutboundCalls;
+        
+        // Flag only if BOTH conditions are not met (under 2 hours AND under 80 calls)
+        return !hasEnoughTalkTime && !hasEnoughOutboundCalls;
+      });
       
       if (usersNotMeetingKPIs.length > 0) {
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `⚠️ *KPI Alert:* ${usersNotMeetingKPIs.length} user(s) have not met daily KPIs (60 outbound calls, 2 hours talk time)`
+            text: `🚨 *KPI Alert:* ${usersNotMeetingKPIs.length} user(s) have not met daily KPIs (80 outbound calls AND 2 hours talk time)`
           }
         });
         
         const kpiAlertText = usersNotMeetingKPIs.map(user => {
           const outboundDeficit = Math.max(0, kpiOutboundCalls - user.totalCalls);
           const talkTimeDeficit = Math.max(0, kpiTalkTimeMinutes - user.totalDurationMinutes);
-          return `• *${user.name}*: ${outboundDeficit} more calls, ${talkTimeDeficit} more minutes needed`;
+          return `🔸 *${user.name}*: ${outboundDeficit} more calls, ${talkTimeDeficit} more minutes needed`;
         }).join('\n');
         
         blocks.push({
@@ -199,18 +204,20 @@ class SlackService {
       });
       
       // Check KPI requirements for end of day report
-      const kpiOutboundCalls = 60;
+      const kpiOutboundCalls = 80; // Updated to 80 outbound calls
       const kpiTalkTimeMinutes = 120; // 2 hours
-      const meetsOutboundKPI = user.totalCalls >= kpiOutboundCalls;
-      const meetsTalkTimeKPI = user.totalDurationMinutes >= kpiTalkTimeMinutes;
-      const meetsAllKPIs = meetsOutboundKPI && meetsTalkTimeKPI;
+      
+      // New KPI logic: Only flag if under 2 hours AND under 80 outbound calls
+      const hasEnoughTalkTime = user.totalDurationMinutes >= kpiTalkTimeMinutes;
+      const hasEnoughOutboundCalls = user.totalCalls >= kpiOutboundCalls;
+      const meetsKPIs = hasEnoughTalkTime || hasEnoughOutboundCalls; // Pass if EITHER condition is met
       
       // Create KPI status indicators
-      const outboundStatus = meetsOutboundKPI ? '✅' : '❌';
-      const talkTimeStatus = meetsTalkTimeKPI ? '✅' : '❌';
-      const overallStatus = meetsAllKPIs ? '✅' : '⚠️';
+      const outboundStatus = hasEnoughOutboundCalls ? '✅' : '❌';
+      const talkTimeStatus = hasEnoughTalkTime ? '✅' : '❌';
+      const overallStatus = meetsKPIs ? '✅' : '❌';
       
-      // Add KPI flagging for end of day report
+      // Add KPI flagging for end of day report with improved formatting
       let kpiText = '';
       if (period === 'Daily') {
         kpiText = `\n${overallStatus} *KPI Status:* ${outboundStatus} Outbound (${user.totalCalls}/${kpiOutboundCalls}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`;
@@ -221,11 +228,11 @@ class SlackService {
         fields: [
           {
             type: 'mrkdwn',
-            text: `*${user.name}*${kpiText}`
+            text: `*${user.name}*`
           },
           {
             type: 'mrkdwn',
-            text: `📞 *${user.totalCalls}* outbound calls`
+            text: `📤 *${user.totalCalls}* outbound calls`
           },
           {
             type: 'mrkdwn',
@@ -241,7 +248,7 @@ class SlackService {
           },
           {
             type: 'mrkdwn',
-            text: `⏱️ *${user.totalDurationMinutes}* min total talk time`
+            text: `⏰ *${user.totalDurationMinutes}* min total talk time`
           }
         ]
       };
@@ -250,11 +257,24 @@ class SlackService {
       if (user.error) {
         userBlock.fields.push({
           type: 'mrkdwn',
-          text: `⚠️ *Error:* ${user.error}`
+          text: `❌ *Error:* ${user.error}`
         });
       }
       
       blocks.push(userBlock);
+      
+      // Add KPI status section for end of day report
+      if (period === 'Daily') {
+        blocks.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `${overallStatus} *KPI Status:* ${outboundStatus} Outbound (${user.totalCalls}/${kpiOutboundCalls}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`
+            }
+          ]
+        });
+      }
       
       // Add separator between users (except for the last one)
       if (index < sortedUsers.length - 1) {
@@ -263,7 +283,7 @@ class SlackService {
           elements: [
             {
               type: 'mrkdwn',
-              text: '─────────────────────────────────────────'
+              text: '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
             }
           ]
         });
