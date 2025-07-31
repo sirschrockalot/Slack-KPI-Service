@@ -33,23 +33,19 @@ class ReportScheduler {
   start() {
     this.logger.info('Starting report scheduler...');
     
-    // Schedule afternoon report: Weekdays at 1:01 PM CST/CDT
+    // Schedule afternoon report: Weekdays at 1:01 PM local time
     this.afternoonJob = cron.schedule('1 13 * * 1-5', () => {
       this.runAfternoonReport();
-    }, {
-      timezone: 'America/Chicago'
     });
     
-    // Schedule night report: Weekdays at 6:30 PM CST/CDT
+    // Schedule night report: Weekdays at 6:30 PM local time
     this.nightJob = cron.schedule('30 18 * * 1-5', () => {
       this.runNightReport();
-    }, {
-      timezone: 'America/Chicago'
     });
     
     this.logger.info('Report scheduler started successfully');
-    this.logger.info('Afternoon report scheduled: Weekdays at 1:01 PM CST');
-    this.logger.info('Night report scheduled: Weekdays at 6:30 PM CST');
+    this.logger.info('Afternoon report scheduled: Weekdays at 1:01 PM local time');
+    this.logger.info('Night report scheduled: Weekdays at 6:30 PM local time');
   }
 
   /**
@@ -163,15 +159,13 @@ class ReportScheduler {
    */
   getNextRunTime(cronExpression, timezone) {
     try {
-      // Use proper timezone-aware calculation
-      const now = new Date();
-      
+      // Use local timezone for calculations
       if (cronExpression === '1 13 * * 1-5') {
-        // Afternoon report: Weekdays at 1:01 PM CST/CDT
-        return this.getNextWeekdayTimeInTimezone(now, 13, 1, 'America/Chicago');
+        // Afternoon report: Weekdays at 1:01 PM local time
+        return this.getNextWeekdayTime(new Date(), 13, 1);
       } else if (cronExpression === '30 18 * * 1-5') {
-        // Night report: Weekdays at 6:30 PM CST/CDT
-        return this.getNextWeekdayTimeInTimezone(now, 18, 30, 'America/Chicago');
+        // Night report: Weekdays at 6:30 PM local time
+        return this.getNextWeekdayTime(new Date(), 18, 30);
       }
       
       return null;
@@ -185,30 +179,48 @@ class ReportScheduler {
    * Get next weekday time for a specific hour and minute in a specific timezone
    */
   getNextWeekdayTimeInTimezone(now, hour, minute, timezone) {
-    // Create a date in the target timezone
-    const targetDate = new Date();
-    const targetTime = new Date(targetDate.toLocaleString("en-US", {timeZone: timezone}));
-    
-    // Set the target hour and minute
-    targetTime.setHours(hour, minute, 0, 0);
-    
-    // If the time has passed today, move to next weekday
-    if (targetTime <= targetDate) {
-      targetTime.setDate(targetTime.getDate() + 1);
+    try {
+      // For America/Chicago timezone, use a simpler approach
+      // America/Chicago is UTC-6 (CST) or UTC-5 (CDT)
+      // We'll use the legacy method with proper offset calculation
+      
+      const nextRun = new Date(now);
+      nextRun.setHours(hour, minute, 0, 0);
+      
+      // If the time has passed today, move to next weekday
+      if (nextRun <= now) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      
+      // Move to next weekday if current day is weekend
+      while (nextRun.getDay() === 0 || nextRun.getDay() === 6) {
+        nextRun.setDate(nextRun.getDate() + 1);
+      }
+      
+      // Convert to UTC for storage
+      // For America/Chicago, we need to account for daylight saving time
+      // Get the timezone offset for the target date
+      const targetTimeString = nextRun.toLocaleString("en-US", {timeZone: timezone});
+      const utcTimeString = nextRun.toLocaleString("en-US", {timeZone: "UTC"});
+      
+      // Calculate the offset
+      const targetDate = new Date(targetTimeString);
+      const utcDate = new Date(utcTimeString);
+      const offsetMs = targetDate.getTime() - utcDate.getTime();
+      
+      // Apply the offset to get the correct UTC time
+      const finalUtcTime = new Date(nextRun.getTime() - offsetMs);
+      
+      return finalUtcTime.toISOString();
+    } catch (error) {
+      this.logger.error('Error in getNextWeekdayTimeInTimezone:', error.message);
+      // Fallback to legacy method
+      return this.getNextWeekdayTime(now, hour, minute);
     }
-    
-    // Move to next weekday if current day is weekend
-    while (targetTime.getDay() === 0 || targetTime.getDay() === 6) {
-      targetTime.setDate(targetTime.getDate() + 1);
-    }
-    
-    // Convert to UTC for storage
-    const utcTime = new Date(targetTime.toLocaleString("en-US", {timeZone: "UTC"}));
-    return utcTime.toISOString();
   }
 
   /**
-   * Get next weekday time for a specific hour and minute (legacy method)
+   * Get next weekday time for a specific hour and minute (local timezone)
    */
   getNextWeekdayTime(now, hour, minute) {
     const nextRun = new Date(now);
@@ -224,10 +236,8 @@ class ReportScheduler {
       nextRun.setDate(nextRun.getDate() + 1);
     }
     
-    // Convert back to UTC for storage
-    const cstOffset = -6;
-    const utcTime = new Date(nextRun.getTime() - (cstOffset * 60 * 60 * 1000));
-    return utcTime.toISOString();
+    // Return the local time as ISO string
+    return nextRun.toISOString();
   }
 
   /**
