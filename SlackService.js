@@ -145,6 +145,44 @@ class SlackService {
     // Sort users by total outbound calls (descending) for better presentation
     const sortedUsers = [...activityData.users].sort((a, b) => b.totalCalls - a.totalCalls);
     
+    // Add KPI summary for end of day report
+    if (period === 'Daily') {
+      const kpiOutboundCalls = 60;
+      const kpiTalkTimeMinutes = 120;
+      
+      const usersNotMeetingKPIs = sortedUsers.filter(user => 
+        user.totalCalls < kpiOutboundCalls || user.totalDurationMinutes < kpiTalkTimeMinutes
+      );
+      
+      if (usersNotMeetingKPIs.length > 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `⚠️ *KPI Alert:* ${usersNotMeetingKPIs.length} user(s) have not met daily KPIs (60 outbound calls, 2 hours talk time)`
+          }
+        });
+        
+        const kpiAlertText = usersNotMeetingKPIs.map(user => {
+          const outboundDeficit = Math.max(0, kpiOutboundCalls - user.totalCalls);
+          const talkTimeDeficit = Math.max(0, kpiTalkTimeMinutes - user.totalDurationMinutes);
+          return `• *${user.name}*: ${outboundDeficit} more calls, ${talkTimeDeficit} more minutes needed`;
+        }).join('\n');
+        
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: kpiAlertText
+          }
+        });
+        
+        blocks.push({
+          type: 'divider'
+        });
+      }
+    }
+    
     // Add user activity with improved formatting
     sortedUsers.forEach((user, index) => {
       const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
@@ -160,12 +198,30 @@ class SlackService {
         totalDurationMinutes: user.totalDurationMinutes
       });
       
+      // Check KPI requirements for end of day report
+      const kpiOutboundCalls = 60;
+      const kpiTalkTimeMinutes = 120; // 2 hours
+      const meetsOutboundKPI = user.totalCalls >= kpiOutboundCalls;
+      const meetsTalkTimeKPI = user.totalDurationMinutes >= kpiTalkTimeMinutes;
+      const meetsAllKPIs = meetsOutboundKPI && meetsTalkTimeKPI;
+      
+      // Create KPI status indicators
+      const outboundStatus = meetsOutboundKPI ? '✅' : '❌';
+      const talkTimeStatus = meetsTalkTimeKPI ? '✅' : '❌';
+      const overallStatus = meetsAllKPIs ? '✅' : '⚠️';
+      
+      // Add KPI flagging for end of day report
+      let kpiText = '';
+      if (period === 'Daily') {
+        kpiText = `\n${overallStatus} *KPI Status:* ${outboundStatus} Outbound (${user.totalCalls}/${kpiOutboundCalls}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`;
+      }
+      
       const userBlock = {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `*${user.name}*`
+            text: `*${user.name}*${kpiText}`
           },
           {
             type: 'mrkdwn',
