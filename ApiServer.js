@@ -14,9 +14,6 @@ const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
 const mongoose = require('mongoose');
-const cron = require('node-cron');
-const ReportScheduler = require('./services/reportScheduler');
-const schedulerRouter = require('./routes/scheduler');
 
 class ApiServer {
   constructor() {
@@ -65,7 +62,7 @@ class ApiServer {
       aircallApiToken: process.env.AIRCALL_API_TOKEN || process.env.INPUT_AIRCALL_API_TOKEN,
       slackApiToken: process.env.SLACK_API_TOKEN || process.env.INPUT_SLACK_API_TOKEN,
       slackChannelId: process.env.SLACK_CHANNEL_ID || process.env.INPUT_SLACK_CHANNEL_ID,
-      port: process.env.PORT || 3000
+      port: process.env.PORT || 6000
     };
     
     // Parse excluded users
@@ -112,9 +109,9 @@ class ApiServer {
       this.config.excludedUsers
     );
 
-    // Initialize report scheduler
-    const baseUrl = `http://0.0.0.0:${this.config.port}`;
-    this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
+    // Removed: Initialize report scheduler
+    // Removed: const baseUrl = `http://0.0.0.0:${this.config.port}`;
+    // Removed: this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
   }
   
   /**
@@ -164,8 +161,7 @@ class ApiServer {
     // JWT authentication middleware (skip /health, /status, debug endpoints, and scheduler endpoints)
     this.app.use((req, res, next) => {
       if (['/health', '/status'].includes(req.path) || 
-          req.path.startsWith('/debug/') || 
-          req.path.startsWith('/scheduler/')) {
+          req.path.startsWith('/debug/')) {
         return next();
       }
       const authHeader = req.headers['authorization'];
@@ -216,7 +212,7 @@ class ApiServer {
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
-    this.app.use(schedulerRouter(this.logger, this.reportScheduler, this.generateReport.bind(this), this.slackService));
+    // Removed: this.app.use(schedulerRouter(this.logger, this.reportScheduler, this.generateReport.bind(this), this.slackService));
   }
   
   /**
@@ -299,18 +295,8 @@ class ApiServer {
         this.logger.info('  POST /report/afternoon - Trigger afternoon report');
         this.logger.info('  POST /report/night - Trigger night report');
         this.logger.info('  POST /report/custom - Trigger custom time range report');
-        this.logger.info('  GET /scheduler/status - Get scheduler status');
-        this.logger.info('  POST /scheduler/start - Start scheduler');
-        this.logger.info('  POST /scheduler/stop - Stop scheduler');
-        this.logger.info('  POST /scheduler/trigger/afternoon - Manually trigger afternoon report');
-        this.logger.info('  POST /scheduler/trigger/night - Manually trigger night report');
-        this.logger.info('  GET /scheduler/next-runs - Get next scheduled run times');
         this.logger.info('  GET /api-docs - API documentation');
         this.logger.info('  GET /metrics - Prometheus metrics');
-        
-        // Start the report scheduler
-        this.logger.info('Starting report scheduler...');
-        this.reportScheduler.start();
         
       });
       
@@ -327,9 +313,9 @@ class ApiServer {
    */
   stop() {
     // Stop the report scheduler
-    if (this.reportScheduler) {
-      this.reportScheduler.stop();
-    }
+    // Removed: if (this.reportScheduler) {
+    // Removed:   this.reportScheduler.stop();
+    // Removed: }
     
     if (this.server) {
       this.server.close(() => {
