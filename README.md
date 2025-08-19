@@ -1,20 +1,29 @@
 # Aircall Slack Agent
 
-A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service can run on-demand via API endpoints or be triggered by external schedulers.
+A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service is deployed on Google Kubernetes Service (GKS) with automated CI/CD via GitHub Actions.
 
 ## 🚀 Deployment
 
-This service can be deployed to Google Kubernetes Engine (GKE) using our infrastructure as code repository:
+This service is deployed to **Google Kubernetes Service (GKS)** using our automated CI/CD pipeline:
 
-**Infrastructure Repository**: [gks_infra_as_code](https://github.com/YOUR_USERNAME/gks_infra_as_code)
+**Deployment Status**: ✅ **Production Ready on GKS**
 
-The infrastructure repository contains:
-- Terraform configuration for GKE cluster
-- Kubernetes manifests for deployment
-- CI/CD pipelines with GitHub Actions
-- Deployment scripts and documentation
+The service is automatically deployed via GitHub Actions when you push to the main branch:
+- **Build**: Docker image built and pushed to Artifact Registry
+- **Deploy**: Automatic deployment to GKS cluster with manual approval
+- **Scale**: Auto-scaling based on CPU/memory usage (2-10 replicas)
+- **Monitor**: Built-in health checks and Prometheus metrics
 
-For deployment instructions, see the [README-GKE.md](https://github.com/YOUR_USERNAME/gks_infra_as_code/blob/main/README-GKE.md) in the infrastructure repository.
+### Access URLs
+- **Health Check**: http://34.41.164.37/health
+- **Status**: http://34.41.164.37/status
+- **Metrics**: http://34.41.164.37/metrics
+- **API Docs**: http://34.41.164.37/api-docs
+
+For detailed deployment information, see:
+- [GITHUB-ACTIONS-SETUP.md](GITHUB-ACTIONS-SETUP.md) - GitHub Actions configuration
+- [GKS-DEPLOYMENT-GUIDE-IMPROVED.md](GKS-DEPLOYMENT-GUIDE-IMPROVED.md) - GKS deployment guide
+- [WORKLOAD-IDENTITY-SUMMARY.md](WORKLOAD-IDENTITY-SUMMARY.md) - Security setup
 
 ## Features
 
@@ -304,7 +313,6 @@ aircall-slack-agent/
 ```
 
 **Note:** This service uses MongoDB Atlas for database storage. No local MongoDB installation is required.
-```
 
 ## Monitoring & Observability
 

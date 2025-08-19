@@ -16,8 +16,6 @@ metadata:
     cloud.google.com/global-static-ip-name: "aircall-slack-ip"
     # Health checks
     cloud.google.com/health-checks: "true"
-    # Backend configuration
-    cloud.google.com/backend-config: '{"default": "aircall-slack-backend-config"}'
 spec:
   # SSL/TLS configuration (uncomment when you have a domain)
   # tls:
@@ -25,40 +23,7 @@ spec:
   #   - your-domain.com  # Replace with your actual domain
   #   secretName: aircall-slack-tls
   rules:
-  # Domain-based routing (uncomment when you have a domain)
-  # - host: your-domain.com  # Replace with your actual domain
-  #   http:
-  #     paths:
-  #     - path: /
-  #       pathType: Prefix
-  #       backend:
-  #         service:
-  #           name: aircall-slack-service
-  #           port:
-  #             number: 80
-  #     - path: /health
-  #       pathType: Exact
-  #       backend:
-  #         service:
-  #           name: aircall-slack-service
-  #           port:
-  #             number: 80
-  #     - path: /metrics
-  #       pathType: Exact
-  #       backend:
-  #         service:
-  #           name: aircall-slack-service
-  #           port:
-  #             number: 80
-  #     - path: /api-docs
-  #       pathType: Exact
-  #       backend:
-  #         service:
-  #           name: aircall-slack-service
-  #           port:
-  #             number: 80
-  
-  # IP-based routing (fallback for development)
+  # Simple, working path-based routing
   - http:
       paths:
       - path: /
