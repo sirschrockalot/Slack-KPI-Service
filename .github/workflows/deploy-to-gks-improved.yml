@@ -34,6 +34,7 @@ env:
   REPOSITORY: docker-repo
   WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
   GCP_SERVICE_ACCOUNT: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+  USE_GKE_GCLOUD_AUTH_PLUGIN: True
 
 jobs:
   # Job 1: Build and prepare for deployment
@@ -181,8 +182,24 @@ jobs:
       with:
         project_id: ${{ env.PROJECT_ID }}
         
+    - name: Install gke-gcloud-auth-plugin
+      run: |
+        echo "Installing gke-gcloud-auth-plugin..."
+        gcloud components install gke-gcloud-auth-plugin --quiet
+        
+        # Verify installation
+        if command -v gke-gcloud-auth-plugin >/dev/null 2>&1; then
+          echo "✅ gke-gcloud-auth-plugin installed successfully"
+        else
+          echo "❌ gke-gcloud-auth-plugin installation failed"
+          exit 1
+        fi
+        
     - name: Get GKS Credentials
       run: |
+        # Set environment variable for kubectl to use the auth plugin
+        export USE_GKE_GCLOUD_AUTH_PLUGIN=True
+        
         gcloud container clusters get-credentials ${{ env.CLUSTER_NAME }} \
           --region ${{ env.CLUSTER_REGION }} \
           --project ${{ env.PROJECT_ID }}
