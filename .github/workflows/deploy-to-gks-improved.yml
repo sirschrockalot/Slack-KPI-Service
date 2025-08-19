@@ -19,6 +19,11 @@ on:
       - '.github/workflows/deploy-to-gks-improved.yml'
   workflow_dispatch: # Allow manual triggering
 
+# Required permissions for Workload Identity
+permissions:
+  id-token: write   # This is required for requesting the JWT
+  contents: read    # This is required for actions/checkout
+
 env:
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   CLUSTER_NAME: ${{ secrets.GKS_CLUSTER_NAME }}
