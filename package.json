@@ -1,43 +1,42 @@
 {
   "name": "aircall-slack-agent",
   "version": "1.0.0",
-  "description": "On-demand agent to monitor Aircall activity and report to Slack",
+  "description": "Aircall Slack Agent for KPI reporting",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "node test.js",
-    "report:afternoon": "node index.js --report afternoon",
-    "report:night": "node index.js --report night",
-    "report:custom": "node index.js --report custom"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "report:afternoon": "node -e \"require('./services/reportScheduler.js').generateAfternoonReport()\"",
+    "report:night": "node -e \"require('./services/reportScheduler.js').generateNightReport()\"",
+    "report:custom": "node -e \"require('./services/reportScheduler.js').generateCustomReport()\""
   },
+  "keywords": ["aircall", "slack", "kpi", "reporting"],
+  "author": "Joel Schrock",
+  "license": "MIT",
   "dependencies": {
-    "axios": "^1.6.0",
-    "cors": "^2.8.5",
-    "cron-parser": "^5.3.0",
-    "dotenv": "^17.2.1",
     "express": "^4.18.2",
-    "express-prometheus-middleware": "^1.2.0",
-    "express-rate-limit": "^8.0.0",
-    "express-validator": "^7.2.1",
-    "helmet": "^8.1.0",
+    "mongoose": "^7.5.0",
+    "axios": "^1.5.0",
+    "node-cron": "^3.0.2",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.16.4",
-    "node-cron": "^4.2.1",
-    "prom-client": "^13.2.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.0",
-    "winston": "^3.11.0"
+    "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
   },
-  "keywords": [
-    "aircall",
-    "slack",
-    "monitoring",
-    "on-demand"
-  ],
-  "author": "Your Name",
-  "license": "MIT"
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sirschrockalot/Slack-KPI-Service.git"
+  },
+  "homepage": "https://github.com/sirschrockalot/Slack-KPI-Service#readme",
+  "deployment": {
+    "environment": "production",
+    "platform": "gks",
+    "last_deployment_test": "2025-08-19"
+  }
 }
