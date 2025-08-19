@@ -1,0 +1,105 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aircall-slack-ingress
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+    environment: production
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    cloud.google.com/load-balancer-type: "External"
+    # SSL/TLS configuration (uncomment when you have a domain)
+    # kubernetes.io/ingress.allow-http: "false"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # Static IP reservation
+    cloud.google.com/global-static-ip-name: "aircall-slack-ip"
+    # Health checks
+    cloud.google.com/health-checks: "true"
+    # Backend configuration
+    cloud.google.com/backend-config: '{"default": "aircall-slack-backend-config"}'
+spec:
+  # SSL/TLS configuration (uncomment when you have a domain)
+  # tls:
+  # - hosts:
+  #   - your-domain.com  # Replace with your actual domain
+  #   secretName: aircall-slack-tls
+  rules:
+  # Domain-based routing (uncomment when you have a domain)
+  # - host: your-domain.com  # Replace with your actual domain
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: aircall-slack-service
+  #           port:
+  #             number: 80
+  #     - path: /health
+  #       pathType: Exact
+  #       backend:
+  #         service:
+  #           name: aircall-slack-service
+  #           port:
+  #             number: 80
+  #     - path: /metrics
+  #       pathType: Exact
+  #       backend:
+  #         service:
+  #           name: aircall-slack-service
+  #           port:
+  #             number: 80
+  #     - path: /api-docs
+  #       pathType: Exact
+  #       backend:
+  #         service:
+  #           name: aircall-slack-service
+  #           port:
+  #             number: 80
+  
+  # IP-based routing (fallback for development)
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+      - path: /metrics
+        pathType: Exact
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+      - path: /api-docs
+        pathType: Exact
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+      - path: /status
+        pathType: Exact
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80
+      - path: /report
+        pathType: Prefix
+        backend:
+          service:
+            name: aircall-slack-service
+            port:
+              number: 80

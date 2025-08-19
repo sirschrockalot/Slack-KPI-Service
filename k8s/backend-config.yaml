@@ -1,0 +1,22 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: aircall-slack-backend-config
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+spec:
+  healthCheck:
+    checkIntervalSec: 15
+    timeoutSec: 5
+    healthyThreshold: 2
+    unhealthyThreshold: 3
+    type: HTTP
+    requestPath: /health
+    port: 80
+  connectionDraining:
+    drainingTimeoutSec: 60
+  timeoutSec: 30
+  logging:
+    enable: true
+    sampleRate: 1.0

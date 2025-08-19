@@ -1,0 +1,42 @@
+---
+# NodePort Service for ingress compatibility
+apiVersion: v1
+kind: Service
+metadata:
+  name: aircall-slack-service
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+  annotations:
+    cloud.google.com/backend-config: '{"default": "aircall-slack-backend-config"}'
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 6000
+    protocol: TCP
+    name: http
+  selector:
+    app: aircall-slack-service
+---
+# LoadBalancer Service for external access (alternative)
+apiVersion: v1
+kind: Service
+metadata:
+  name: aircall-slack-loadbalancer
+  namespace: aircall-slack
+  labels:
+    app: aircall-slack-service
+  annotations:
+    cloud.google.com/load-balancer-type: "External"
+    cloud.google.com/neg: '{"ingress": true}'
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 6000
+    protocol: TCP
+    name: http
+  selector:
+    app: aircall-slack-service

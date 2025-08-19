@@ -17,7 +17,42 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  # Aircall Slack Agent
+  # Aircall Slack Agent (GKS Deployment)
+  - job_name: 'aircall-slack-agent-gks'
+    kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+            - aircall-slack
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+      - source_labels: [__meta_kubernetes_pod_container_name]
+        action: replace
+        target_label: kubernetes_container_name
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # Legacy Aircall Slack Agent (Docker Compose)
   - job_name: 'aircall-slack-agent'
     static_configs:
       - targets: ['aircall-slack-agent:3000']
@@ -34,4 +69,14 @@ scrape_configs:
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
-    metrics_path: '/metrics' 
+    metrics_path: '/metrics'
+
+  # GKE Node Metrics (if accessible)
+  - job_name: 'gke-nodes'
+    kubernetes_sd_configs:
+      - role: node
+    relabel_configs:
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+    metrics_path: '/metrics'
+    scrape_interval: 30s 
