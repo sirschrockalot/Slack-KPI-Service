@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # MongoDB for local testing
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=aircall-slack-agent-local
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+  # Main application for local testing
+  aircall-slack-agent:
+    build: .
+    ports:
+      - "6000:6000"
+    environment:
+      - NODE_ENV=development
+      - PORT=6000
+      - MONGODB_URI=mongodb://mongodb:27017/aircall-slack-agent-local
+      - AIRCALL_API_ID=${AIRCALL_API_ID}
+      - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
+      - SLACK_API_TOKEN=${SLACK_API_TOKEN}
+      - SLACK_CHANNEL_ID=${SLACK_CHANNEL_ID}
+      - JWT_SECRET=${JWT_SECRET:-local_jwt_secret_for_testing}
+      - EXCLUDED_USERS=${EXCLUDED_USERS}
+      - LOG_LEVEL=debug
+      - ENABLE_SWAGGER=true
+      - ENABLE_METRICS=true
+    depends_on:
+      - mongodb
+    networks:
+      - app-network
+    # Use the production start command since nodemon isn't in the image
+    command: npm start
+
+  # Optional: Prometheus for local metrics testing
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - app-network
+
+  # Optional: Grafana for local monitoring testing
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - app-network
+
+volumes:
+  mongodb_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  app-network:
+    driver: bridge
