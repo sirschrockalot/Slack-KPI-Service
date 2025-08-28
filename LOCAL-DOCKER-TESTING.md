@@ -58,7 +58,7 @@ docker-compose -f docker-compose.local.yml up --build aircall-slack-agent mongod
 
 ### What's Included
 
-1. **MongoDB Database** - Local MongoDB instance for testing
+
 2. **Hot Reload** - Code changes automatically restart the app
 3. **Debug Logging** - Detailed logs for development
 4. **Monitoring Stack** - Optional Prometheus and Grafana
@@ -68,7 +68,6 @@ docker-compose -f docker-compose.local.yml up --build aircall-slack-agent mongod
 
 | Setting | Production (GKS) | Local (Docker) |
 |---------|------------------|----------------|
-| Database | MongoDB Atlas | Local MongoDB |
 | Log Level | info | debug |
 | Node Env | production | development |
 | Hot Reload | ❌ | ✅ |
@@ -98,8 +97,7 @@ curl -X POST http://localhost:6000/report \
 # View app logs
 docker-compose -f docker-compose.local.yml logs -f aircall-slack-agent
 
-# View MongoDB logs
-docker-compose -f docker-compose.local.yml logs -f mongodb
+
 ```
 
 ### 4. Stop Services
@@ -123,14 +121,7 @@ docker-compose -f docker-compose.local.yml down -v
    # Kill the process or change the port in docker-compose.local.yml
    ```
 
-2. **MongoDB Connection Issues**
-   ```bash
-   # Check MongoDB is running
-   docker-compose -f docker-compose.local.yml ps mongodb
-   
-   # View MongoDB logs
-   docker-compose -f docker-compose.local.yml logs mongodb
-   ```
+
 
 3. **Environment Variables Not Loading**
    ```bash

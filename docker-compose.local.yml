@@ -1,18 +1,6 @@
 version: '3.8'
 
 services:
-  # MongoDB for local testing
-  mongodb:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
-    environment:
-      - MONGO_INITDB_DATABASE=aircall-slack-agent-local
-    volumes:
-      - mongodb_data:/data/db
-    networks:
-      - app-network
-
   # Main application for local testing
   aircall-slack-agent:
     build: .
@@ -21,7 +9,6 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=6000
-      - MONGODB_URI=mongodb://mongodb:27017/aircall-slack-agent-local
       - AIRCALL_API_ID=${AIRCALL_API_ID}
       - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
       - SLACK_API_TOKEN=${SLACK_API_TOKEN}
@@ -31,8 +18,6 @@ services:
       - LOG_LEVEL=debug
       - ENABLE_SWAGGER=true
       - ENABLE_METRICS=true
-    depends_on:
-      - mongodb
     networks:
       - app-network
     # Use the production start command since nodemon isn't in the image
@@ -69,7 +54,6 @@ services:
       - app-network
 
 volumes:
-  mongodb_data:
   prometheus_data:
   grafana_data:
 

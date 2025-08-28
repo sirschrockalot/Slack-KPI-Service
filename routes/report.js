@@ -1,7 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const Report = require('../models/Report');
-// Removed: const UserCallStats = require('../models/UserCallStats');
+
 
 module.exports = (logger, generateReport, slackService) => {
   const router = express.Router();

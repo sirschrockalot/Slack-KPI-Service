@@ -13,17 +13,10 @@ const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
-const mongoose = require('mongoose');
-
 class ApiServer {
   constructor() {
     this.app = express();
     this.server = null;
-    
-    // Connect to MongoDB
-    mongoose.connect(process.env.MONGODB_URI)
-      .then(() => console.log('MongoDB connected'))
-      .catch(err => console.error('MongoDB connection error:', err));
     
     // Configure logger
     this.logger = winston.createLogger({

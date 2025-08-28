@@ -1,10 +1,48 @@
 # Aircall Slack Agent
 
-A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service is deployed on Google Kubernetes Service (GKS) with automated CI/CD via GitHub Actions.
+A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service supports multiple deployment platforms including Google Kubernetes Service (GKS) and Heroku.
 
-## 🚀 Deployment
+## 🚀 Deployment Options
 
-This service is deployed to **Google Kubernetes Service (GKS)** using our automated CI/CD pipeline:
+### Option 1: Heroku (Recommended for Quick Setup)
+
+**Deployment Status**: ✅ **Production Ready on Heroku**
+
+#### 🚀 Automated Deployment with GitHub Actions
+
+**Recommended**: Set up automated CI/CD with GitHub Actions:
+
+1. **Configure GitHub Secrets** (see [GITHUB-ACTIONS-HEROKU-SETUP.md](GITHUB-ACTIONS-HEROKU-SETUP.md))
+2. **Run Setup Workflow** to create and configure your Heroku app
+3. **Push to main branch** for automatic deployment
+
+**Features**:
+- 🚀 **Automated CI/CD** with GitHub Actions
+- ✅ **Testing** on multiple Node.js versions
+- 🔄 **Automatic deployment** on every push to main
+- 🧪 **Post-deployment testing** and health checks
+- 💰 **Cost-effective** (~$7/month for basic dyno)
+- 🔧 **Easy configuration** with environment variables
+- 📊 **Built-in monitoring** and logging
+- 🔒 **HTTPS by default** with security headers
+
+#### 🔧 Manual Deployment
+
+Quick deployment to Heroku with automated setup:
+
+```bash
+# Install Heroku CLI and deploy
+brew tap heroku/brew && brew install heroku
+heroku login
+./scripts/deploy-heroku.sh your-app-name
+```
+
+For detailed Heroku deployment information, see:
+- [GITHUB-ACTIONS-HEROKU-SETUP.md](GITHUB-ACTIONS-HEROKU-SETUP.md) - GitHub Actions + Heroku setup
+- [HEROKU-QUICK-START.md](HEROKU-QUICK-START.md) - Quick start guide
+- [HEROKU-DEPLOYMENT-GUIDE.md](HEROKU-DEPLOYMENT-GUIDE.md) - Comprehensive deployment guide
+
+### Option 2: Google Kubernetes Service (GKS)
 
 **Deployment Status**: ✅ **Production Ready on GKS**
 
@@ -14,13 +52,13 @@ The service is automatically deployed via GitHub Actions when you push to the ma
 - **Scale**: Auto-scaling based on CPU/memory usage (2-10 replicas)
 - **Monitor**: Built-in health checks and Prometheus metrics
 
-### Access URLs
+**Current GKS Access URLs**:
 - **Health Check**: http://34.41.164.37/health
 - **Status**: http://34.41.164.37/status
 - **Metrics**: http://34.41.164.37/metrics
 - **API Docs**: http://34.41.164.37/api-docs
 
-For detailed deployment information, see:
+For detailed GKS deployment information, see:
 - [GITHUB-ACTIONS-SETUP.md](GITHUB-ACTIONS-SETUP.md) - GitHub Actions configuration
 - [GKS-DEPLOYMENT-GUIDE-IMPROVED.md](GKS-DEPLOYMENT-GUIDE-IMPROVED.md) - GKS deployment guide
 - [WORKLOAD-IDENTITY-SUMMARY.md](WORKLOAD-IDENTITY-SUMMARY.md) - Security setup
@@ -127,18 +165,7 @@ INPUT_EXCLUDED_USERS=Joel Schrock,Another User
 2. Navigate to the target channel
 3. Copy the channel ID from the URL (e.g., `C1234567890`)
 
-#### MongoDB Atlas Setup
-1. Create a free MongoDB Atlas account at [mongodb.com](https://www.mongodb.com/atlas)
-2. Create a new cluster (M0 Free tier is sufficient for development)
-3. Create a database user with read/write permissions
-4. Get your connection string from the "Connect" button
-5. Replace `username`, `password`, and `cluster` in the connection string
-6. Add the connection string to your `.env` file as `MONGODB_URI`
 
-Example connection string:
-```
-mongodb+srv://yourusername:yourpassword@cluster0.xxxxx.mongodb.net/aircall-slack-agent?retryWrites=true&w=majority
-```
 
 ## Usage
 
@@ -302,9 +329,7 @@ aircall-slack-agent/
 │   └── testConnections.js  # Connection testing endpoints
 ├── services/               # Business logic services
 │   └── reportScheduler.js  # Automated report scheduling
-├── models/                 # Database models
-│   ├── Report.js           # Report model
-│   └── SyncStatus.js       # Sync status tracking
+
 ├── monitoring/             # Monitoring configuration
 │   ├── prometheus.yml      # Prometheus config
 │   ├── alert_rules.yml     # Alerting rules
@@ -312,7 +337,7 @@ aircall-slack-agent/
 └── README.md               # This file
 ```
 
-**Note:** This service uses MongoDB Atlas for database storage. No local MongoDB installation is required.
+
 
 ## Monitoring & Observability
 
@@ -350,7 +375,7 @@ This includes:
 - **Node Exporter**: System metrics
 - **cAdvisor**: Container metrics
 
-**Note:** The application requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable.
+
 
 Access the monitoring tools:
 - Prometheus: http://localhost:9090

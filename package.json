@@ -9,7 +9,8 @@
     "test": "node test.js",
     "report:afternoon": "node index.js --report afternoon",
     "report:night": "node index.js --report night",
-    "report:custom": "node index.js --report custom"
+    "report:custom": "node index.js --report custom",
+    "heroku-postbuild": "echo 'Build completed successfully!'"
   },
   "keywords": [
     "aircall",
@@ -30,7 +31,6 @@
     "express-validator": "^7.2.1",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.16.4",
     "node-cron": "^4.2.1",
     "prom-client": "^13.2.0",
     "swagger-jsdoc": "^6.2.8",
@@ -50,7 +50,7 @@
   "homepage": "https://github.com/sirschrockalot/Slack-KPI-Service#readme",
   "deployment": {
     "environment": "production",
-    "platform": "gks",
-    "last_deployment_test": "2025-08-19"
+    "platform": "heroku",
+    "last_deployment_test": "2025-08-26"
   }
 }

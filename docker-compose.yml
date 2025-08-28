@@ -9,7 +9,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=6000
-      - MONGODB_URI=${MONGODB_URI}
       - AIRCALL_API_ID=${AIRCALL_API_ID}
       - AIRCALL_API_TOKEN=${AIRCALL_API_TOKEN}
       - SLACK_API_TOKEN=${SLACK_API_TOKEN}

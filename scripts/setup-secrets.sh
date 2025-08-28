@@ -94,7 +94,7 @@ prompt_for_value() {
 print_status "Setting up Kubernetes secrets for Aircall Slack Service..."
 
 # Get values for secrets
-MONGODB_URI=$(prompt_for_value "MONGODB_URI" "MongoDB connection string")
+
 AIRCALL_API_ID=$(prompt_for_value "AIRCALL_API_ID" "Aircall API ID")
 AIRCALL_API_TOKEN=$(prompt_for_value "AIRCALL_API_TOKEN" "Aircall API token")
 SLACK_API_TOKEN=$(prompt_for_value "SLACK_API_TOKEN" "Slack API token")
@@ -120,7 +120,7 @@ metadata:
     app: aircall-slack-service
 type: Opaque
 data:
-  mongodb-uri: $(echo -n "$MONGODB_URI" | base64)
+
   aircall-api-id: $(echo -n "$AIRCALL_API_ID" | base64)
   aircall-api-token: $(echo -n "$AIRCALL_API_TOKEN" | base64)
   slack-api-token: $(echo -n "$SLACK_API_TOKEN" | base64)

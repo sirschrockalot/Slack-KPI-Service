@@ -8,7 +8,7 @@ echo "2. Run with Docker (production)"
 echo "3. Run with Docker + Monitoring stack"
 echo "4. Run monitoring stack only"
 echo ""
-echo "Note: All options require MongoDB Atlas connection string in MONGODB_URI"
+
 echo ""
 
 read -p "Enter your choice (1-4): " choice

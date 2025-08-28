@@ -1,0 +1,81 @@
+{
+  "name": "Slack-KPI-Service",
+  "description": "On-demand agent to monitor Aircall activity and report to Slack",
+  "repository": "https://github.com/sirschrockalot/Slack-KPI-Service",
+  "logo": "https://node-js-sample.herokuapp.com/node.png",
+  "keywords": ["node", "express", "aircall", "slack", "monitoring"],
+  "env": {
+    "NODE_ENV": {
+      "description": "Environment setting for the application",
+      "value": "production"
+    },
+    "PORT": {
+      "description": "Port for the web server",
+      "value": "6000"
+    },
+    "AIRCALL_API_ID": {
+      "description": "Aircall API ID",
+      "required": true
+    },
+    "AIRCALL_API_TOKEN": {
+      "description": "Aircall API Token",
+      "required": true
+    },
+    "SLACK_API_TOKEN": {
+      "description": "Slack Bot Token",
+      "required": true
+    },
+    "SLACK_CHANNEL_ID": {
+      "description": "Slack Channel ID for reports",
+      "required": true
+    },
+    "JWT_SECRET": {
+      "description": "JWT Secret for API authentication",
+      "required": true,
+      "generator": "secret"
+    },
+    "EXCLUDED_USERS": {
+      "description": "Comma-separated list of users to exclude from reports",
+      "value": "Joel Schrock,Test User"
+    },
+    "AFTERNOON_REPORT_TIME": {
+      "description": "Time for afternoon reports (HH:MM)",
+      "value": "19:34"
+    },
+    "NIGHT_REPORT_TIME": {
+      "description": "Time for night reports (HH:MM)",
+      "value": "22:00"
+    },
+    "TZ": {
+      "description": "Timezone for the application",
+      "value": "America/Chicago"
+    },
+    "ENABLE_SWAGGER": {
+      "description": "Enable Swagger API documentation",
+      "value": "true"
+    },
+    "ENABLE_METRICS": {
+      "description": "Enable Prometheus metrics",
+      "value": "true"
+    },
+    "LOG_LEVEL": {
+      "description": "Logging level",
+      "value": "info"
+    }
+  },
+
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [
+    {
+      "url": "heroku/nodejs"
+    }
+  ],
+  "scripts": {
+    "postdeploy": "echo 'Deployment completed successfully!'"
+  }
+}

@@ -136,7 +136,7 @@ docker-compose --profile monitoring up -d
 docker-compose --profile monitoring up -d
 ```
 
-**Note:** The application requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable.
+
 
 Access monitoring tools:
 - Prometheus: http://localhost:9090
@@ -147,7 +147,7 @@ Access monitoring tools:
 
 ### Environment Variables
 
-The service requires a MongoDB Atlas connection string in the `MONGODB_URI` environment variable. No local MongoDB installation is needed.
+
 
 Example:
 ```env
