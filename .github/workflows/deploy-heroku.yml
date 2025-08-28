@@ -116,6 +116,10 @@ jobs:
         echo "Adding Heroku remote..."
         heroku git:remote -a "${{ secrets.HEROKU_APP_NAME }}"
         
+        # Unshallow the git repository (GitHub Actions creates shallow clones)
+        echo "Unshallowing git repository..."
+        git fetch --all --unshallow
+        
         echo "Pushing to Heroku..."
         git push heroku main:main
         
