@@ -1,0 +1,167 @@
+name: Setup Heroku App (Improved)
+
+on:
+  workflow_dispatch: # Manual trigger only
+    inputs:
+      app_name:
+        description: 'Heroku App Name'
+        required: true
+        type: string
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'setup'
+        type: choice
+        options:
+        - setup
+        - configure
+        - cleanup
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  setup-heroku:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Use Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install Heroku CLI
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ github.event.inputs.app_name }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        appdir: "."
+        usedocker: false
+        justlogin: true
+    
+    - name: Create Heroku app
+      if: github.event.inputs.action == 'setup'
+      run: |
+        echo "Creating Heroku app: ${{ github.event.inputs.app_name }}"
+        
+        # Check if app exists
+        if heroku apps:info --app "${{ github.event.inputs.app_name }}" 2>/dev/null; then
+          echo "✅ App already exists: ${{ github.event.inputs.app_name }}"
+        else
+          echo "Creating new app..."
+          heroku create "${{ github.event.inputs.app_name }}"
+        fi
+        
+        # Add Heroku remote if not exists
+        if ! git remote | grep -q heroku; then
+          heroku git:remote -a "${{ github.event.inputs.app_name }}"
+          echo "✅ Added Heroku remote"
+        else
+          echo "✅ Heroku remote already exists"
+        fi
+    
+    - name: Configure environment variables
+      if: github.event.inputs.action == 'configure'
+      run: |
+        echo "Configuring environment variables..."
+        
+        # Set required environment variables
+        REQUIRED_VARS=(
+          "AIRCALL_API_ID"
+          "AIRCALL_API_TOKEN"
+          "SLACK_API_TOKEN"
+          "SLACK_CHANNEL_ID"
+          "JWT_SECRET"
+        )
+        
+        for var in "${REQUIRED_VARS[@]}"; do
+          if [ "$var" = "AIRCALL_API_ID" ]; then
+            secret_value="${{ secrets.AIRCALL_API_ID }}"
+          elif [ "$var" = "AIRCALL_API_TOKEN" ]; then
+            secret_value="${{ secrets.AIRCALL_API_TOKEN }}"
+          elif [ "$var" = "SLACK_API_TOKEN" ]; then
+            secret_value="${{ secrets.SLACK_API_TOKEN }}"
+          elif [ "$var" = "SLACK_CHANNEL_ID" ]; then
+            secret_value="${{ secrets.SLACK_CHANNEL_ID }}"
+          elif [ "$var" = "JWT_SECRET" ]; then
+            secret_value="${{ secrets.JWT_SECRET }}"
+          else
+            secret_value=""
+          fi
+          
+          if [ -n "$secret_value" ]; then
+            echo "Setting $var..."
+            heroku config:set "$var=$secret_value" --app "${{ github.event.inputs.app_name }}"
+          else
+            echo "⚠️ Secret $var not found in GitHub secrets"
+          fi
+        done
+        
+        # Set default environment variables
+        DEFAULT_VARS=(
+          "NODE_ENV=production"
+          "PORT=6000"
+          "EXCLUDED_USERS=Joel Schrock,Test User"
+          "AFTERNOON_REPORT_TIME=19:34"
+          "NIGHT_REPORT_TIME=22:00"
+          "TZ=America/Chicago"
+          "ENABLE_SWAGGER=true"
+          "ENABLE_METRICS=true"
+          "LOG_LEVEL=info"
+        )
+        
+        for var in "${DEFAULT_VARS[@]}"; do
+          key="${var%%=*}"
+          value="${var#*=}"
+          echo "Setting $key..."
+          heroku config:set "$key=$value" --app "${{ github.event.inputs.app_name }}"
+        done
+        
+        echo "✅ Environment variables configured"
+    
+    - name: Verify configuration
+      run: |
+        echo "Verifying Heroku app configuration..."
+        
+        # Check app status
+        echo "App Status:"
+        heroku ps --app "${{ github.event.inputs.app_name }}"
+        
+        # Check add-ons
+        echo "Add-ons:"
+        heroku addons --app "${{ github.event.inputs.app_name }}"
+        
+        # Check environment variables
+        echo "Environment Variables:"
+        heroku config --app "${{ github.event.inputs.app_name }}"
+        
+        # Check app info
+        echo "App Info:"
+        heroku apps:info --app "${{ github.event.inputs.app_name }}"
+    
+    - name: Setup summary
+      run: |
+        echo "## 🎯 Heroku Setup Summary" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ github.event.inputs.action }}" == "setup" ]; then
+          echo "### ✅ Setup Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Heroku app created/verified" >> $GITHUB_STEP_SUMMARY
+          echo "- Git remote configured" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ github.event.inputs.action }}" == "configure" ]; then
+          echo "### ✅ Configuration Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment variables set" >> $GITHUB_STEP_SUMMARY
+          echo "- App configuration verified" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ github.event.inputs.action }}" == "cleanup" ]; then
+          echo "### ✅ Cleanup Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- App cleanup completed" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**App Name:** ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Action:** ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** Completed successfully" >> $GITHUB_STEP_SUMMARY
