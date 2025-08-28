@@ -1,4 +1,4 @@
-name: Setup Heroku App (Improved)
+name: Setup Heroku App
 
 on:
   workflow_dispatch: # Manual trigger only
@@ -35,18 +35,21 @@ jobs:
         cache: 'npm'
     
     - name: Install Heroku CLI
-      uses: akhileshns/heroku-deploy@v3.12.14
-      with:
-        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-        heroku_app_name: ${{ github.event.inputs.app_name }}
-        heroku_email: ${{ secrets.HEROKU_EMAIL }}
-        appdir: "."
-        usedocker: false
-        justlogin: true
+      run: |
+        curl https://cli-assets.heroku.com/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "Heroku CLI installed at: $(which heroku)"
+        heroku --version
+    
+    - name: Authenticate with Heroku
+      run: |
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "${{ secrets.HEROKU_API_KEY }}" | heroku login --username "${{ secrets.HEROKU_EMAIL }}" --password-stdin
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Creating Heroku app: ${{ github.event.inputs.app_name }}"
         
         # Check if app exists
@@ -68,6 +71,7 @@ jobs:
     - name: Configure environment variables
       if: github.event.inputs.action == 'configure'
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Configuring environment variables..."
         
         # Set required environment variables
@@ -126,6 +130,7 @@ jobs:
     
     - name: Verify configuration
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Verifying Heroku app configuration..."
         
         # Check app status
