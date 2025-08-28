@@ -44,7 +44,9 @@ jobs:
     - name: Authenticate with Heroku
       run: |
         export PATH="$HOME/.local/bin:$PATH"
-        mkdir -p $HOME/.netrc
+        # Remove any existing .netrc directory and create file
+        rm -rf $HOME/.netrc
+        touch $HOME/.netrc
         echo "machine api.heroku.com" >> $HOME/.netrc
         echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
         echo "  password ${{ secrets.HEROKU_API_KEY }}" >> $HOME/.netrc
