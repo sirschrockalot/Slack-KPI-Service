@@ -44,7 +44,7 @@ jobs:
     - name: Authenticate with Heroku
       run: |
         export PATH="$HOME/.local/bin:$PATH"
-        echo "${{ secrets.HEROKU_API_KEY }}" | heroku login --username "${{ secrets.HEROKU_EMAIL }}" --password-stdin
+        heroku auth:token "${{ secrets.HEROKU_API_KEY }}"
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
