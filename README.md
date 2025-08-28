@@ -2,6 +2,8 @@
 
 A Node.js service that fetches call activity data from Aircall and sends automated reports to Slack. The service supports multiple deployment platforms including Google Kubernetes Service (GKS) and Heroku.
 
+<!-- Test deployment comment - this will trigger the Heroku deployment workflow -->
+
 ## 🚀 Deployment Options
 
 ### Option 1: Heroku (Recommended for Quick Setup)
