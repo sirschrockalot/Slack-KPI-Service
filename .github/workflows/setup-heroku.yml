@@ -43,8 +43,16 @@ jobs:
     
     - name: Authenticate with Heroku
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        heroku auth:token "${{ secrets.HEROKU_API_KEY }}"
+        export PATH="$HOME/.local/bin:$PATH
+        mkdir -p $HOME/.netrc
+        echo "machine api.heroku.com" >> $HOME/.netrc
+        echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
+        echo "  password ${{ secrets.HEROKU_API_KEY }}" >> $HOME/.netrc
+        echo "machine git.heroku.com" >> $HOME/.netrc
+        echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
+        echo "  password ${{ secrets.HEROKU_API_KEY }}" >> $HOME/.netrc
+        chmod 600 $HOME/.netrc
+        echo "✅ Heroku authentication configured via .netrc"
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
