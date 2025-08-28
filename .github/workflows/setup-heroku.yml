@@ -35,13 +35,14 @@ jobs:
         cache: 'npm'
     
     - name: Install Heroku CLI
-      uses: akhileshns/heroku-deploy@v3.12.14
-      with:
-        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
-        heroku_app_name: ${{ github.event.inputs.app_name }}
-        heroku_email: ${{ secrets.HEROKU_EMAIL }}
-        appdir: "."
-        usedocker: false
+      run: |
+        curl https://cli-assets.heroku.com/install.sh | sh
+        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        echo "$HOME/.local/bin/heroku" >> $GITHUB_PATH
+    
+    - name: Authenticate with Heroku
+      run: |
+        echo "${{ secrets.HEROKU_API_KEY }}" | heroku login --username "${{ secrets.HEROKU_EMAIL }}" --password-stdin
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
@@ -53,7 +54,7 @@ jobs:
           echo "✅ App already exists: ${{ github.event.inputs.app_name }}"
         else
           echo "Creating new app..."
-          heroku create "${{ github.event.inputs.app_name }}" --json
+          heroku create "${{ github.event.inputs.app_name }}"
         fi
         
         # Add Heroku remote if not exists
