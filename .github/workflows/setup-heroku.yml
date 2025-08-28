@@ -43,7 +43,7 @@ jobs:
     
     - name: Authenticate with Heroku
       run: |
-        export PATH="$HOME/.local/bin:$PATH
+        export PATH="$HOME/.local/bin:$PATH"
         mkdir -p $HOME/.netrc
         echo "machine api.heroku.com" >> $HOME/.netrc
         echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
