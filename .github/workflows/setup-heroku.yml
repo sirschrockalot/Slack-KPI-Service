@@ -37,16 +37,19 @@ jobs:
     - name: Install Heroku CLI
       run: |
         curl https://cli-assets.heroku.com/install.sh | sh
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
-        echo "$HOME/.local/bin/heroku" >> $GITHUB_PATH
+        export PATH="$HOME/.local/bin:$PATH"
+        echo "Heroku CLI installed at: $(which heroku)"
+        heroku --version
     
     - name: Authenticate with Heroku
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "${{ secrets.HEROKU_API_KEY }}" | heroku login --username "${{ secrets.HEROKU_EMAIL }}" --password-stdin
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Creating Heroku app: ${{ github.event.inputs.app_name }}"
         
         # Check if app exists
@@ -70,6 +73,7 @@ jobs:
     - name: Configure environment variables
       if: github.event.inputs.action == 'configure'
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Configuring environment variables..."
         
         # Set required environment variables
@@ -128,6 +132,7 @@ jobs:
     
     - name: Verify configuration
       run: |
+        export PATH="$HOME/.local/bin:$PATH"
         echo "Verifying Heroku app configuration..."
         
         # Check app status
