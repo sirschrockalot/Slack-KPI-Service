@@ -1,4 +1,4 @@
-name: Setup Heroku App
+name: Setup Heroku App (Improved)
 
 on:
   workflow_dispatch: # Manual trigger only
@@ -35,21 +35,18 @@ jobs:
         cache: 'npm'
     
     - name: Install Heroku CLI
-      run: |
-        curl https://cli-assets.heroku.com/install.sh | sh
-        export PATH="$HOME/.local/bin:$PATH"
-        echo "Heroku CLI installed at: $(which heroku)"
-        heroku --version
-    
-    - name: Authenticate with Heroku
-      run: |
-        export PATH="$HOME/.local/bin:$PATH"
-        echo "${{ secrets.HEROKU_API_KEY }}" | heroku login --username "${{ secrets.HEROKU_EMAIL }}" --password-stdin
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ github.event.inputs.app_name }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        appdir: "."
+        usedocker: false
+        justlogin: true
     
     - name: Create Heroku app
       if: github.event.inputs.action == 'setup'
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
         echo "Creating Heroku app: ${{ github.event.inputs.app_name }}"
         
         # Check if app exists
@@ -68,12 +65,9 @@ jobs:
           echo "✅ Heroku remote already exists"
         fi
     
-
-    
     - name: Configure environment variables
       if: github.event.inputs.action == 'configure'
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
         echo "Configuring environment variables..."
         
         # Set required environment variables
@@ -132,7 +126,6 @@ jobs:
     
     - name: Verify configuration
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
         echo "Verifying Heroku app configuration..."
         
         # Check app status
@@ -153,12 +146,7 @@ jobs:
     
     - name: Setup summary
       run: |
-        echo "## 🚀 Heroku Setup Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Action**: ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
-        echo "**App Name**: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "**App URL**: https://${{ github.event.inputs.app_name }}.herokuapp.com" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎯 Heroku Setup Summary" >> $GITHUB_STEP_SUMMARY
         
         if [ "${{ github.event.inputs.action }}" == "setup" ]; then
           echo "### ✅ Setup Completed" >> $GITHUB_STEP_SUMMARY
@@ -167,18 +155,13 @@ jobs:
         elif [ "${{ github.event.inputs.action }}" == "configure" ]; then
           echo "### ✅ Configuration Completed" >> $GITHUB_STEP_SUMMARY
           echo "- Environment variables set" >> $GITHUB_STEP_SUMMARY
-          echo "- Default values configured" >> $GITHUB_STEP_SUMMARY
+          echo "- App configuration verified" >> $GITHUB_STEP_SUMMARY
+        elif [ "${{ github.event.inputs.action }}" == "cleanup" ]; then
+          echo "### ✅ Cleanup Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- App cleanup completed" >> $GITHUB_STEP_SUMMARY
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
-        echo "1. Run the deployment workflow to deploy your app" >> $GITHUB_STEP_SUMMARY
-        echo "2. Verify all environment variables are set correctly" >> $GITHUB_STEP_SUMMARY
-        echo "3. Test the deployed application" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### 🔧 Useful Commands" >> $GITHUB_STEP_SUMMARY
-        echo "```bash" >> $GITHUB_STEP_SUMMARY
-        echo "heroku logs --tail --app ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "heroku open --app ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "heroku config --app ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-        echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "**App Name:** ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Action:** ${{ github.event.inputs.action }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** Completed successfully" >> $GITHUB_STEP_SUMMARY
