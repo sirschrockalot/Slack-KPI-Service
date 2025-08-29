@@ -84,43 +84,21 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Install Heroku CLI
-      run: |
-        curl https://cli-assets.heroku.com/install.sh | sh
-        echo "Heroku CLI installed successfully"
-        $HOME/.local/bin/heroku --version
-    
-    - name: Authenticate with Heroku
-      run: |
-        echo "machine api.heroku.com" > $HOME/.netrc
-        echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
-        echo "  password ${{ secrets.HEROKU_API_KEY }}" >> $HOME/.netrc
-        echo "machine git.heroku.com" >> $HOME/.netrc
-        echo "  login ${{ secrets.HEROKU_EMAIL }}" >> $HOME/.netrc
-        echo "  password ${{ secrets.HEROKU_API_KEY }}" >> $HOME/.netrc
-        chmod 600 $HOME/.netrc
-        echo "✅ Heroku authentication configured"
-    
     - name: Deploy to Heroku
-      run: |
-        echo "Deploying to Heroku app: ${{ secrets.HEROKU_APP_NAME }}"
-        
-        # Check if app exists
-        if $HOME/.local/bin/heroku apps:info --app "${{ secrets.HEROKU_APP_NAME }}" 2>/dev/null; then
-          echo "✅ App exists: ${{ secrets.HEROKU_APP_NAME }}"
-        else
-          echo "❌ App not found: ${{ secrets.HEROKU_APP_NAME }}"
-          exit 1
-        fi
-        
-        # Add Heroku remote
-        $HOME/.local/bin/heroku git:remote -a "${{ secrets.HEROKU_APP_NAME }}"
-        
-        # Push to Heroku
-        echo "Pushing to Heroku..."
-        git push heroku main:main
-        
-        echo "✅ Deployment completed"
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        branch: "main"
+        dontautocreate: true
+        usedocker: false
+        docker_heroku_process_type: "web"
+        healthcheck: "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+        checkstring: "healthy"
+        delay: 10
+        procfile: "Procfile"
+        appdir: "."
     
     - name: Verify deployment
       run: |
