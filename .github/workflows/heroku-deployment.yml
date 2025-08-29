@@ -1,8 +1,9 @@
 name: Heroku Deployment
 
-# NEW WORKFLOW - Completely separate from old cached version
+# COMPLETELY NEW WORKFLOW - BREAKS ALL CACHING
+# CACHE_BREAKER: 2025-01-27-16-00-00-UNIQUE-ID-$(date +%s)
 # Uses official Heroku deploy action to resolve all CLI issues
-# Created: 2025-01-27-15-45-00
+# NO CLI COMMANDS - ONLY OFFICIAL ACTIONS
 on:
   push:
     branches: [ main, master ]
@@ -12,6 +13,7 @@ on:
 
 env:
   NODE_VERSION: '18'
+  WORKFLOW_ID: 'heroku-deployment-v2-$(date +%s)'
 
 jobs:
   test:
@@ -161,6 +163,7 @@ jobs:
         echo "**Health Check**: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health" >> $GITHUB_STEP_SUMMARY
         echo "**API Docs**: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/api-docs" >> $GITHUB_STEP_SUMMARY
         echo "**Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "**Workflow ID**: ${{ env.WORKFLOW_ID }}" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
         echo "1. Verify all API endpoints are working" >> $GITHUB_STEP_SUMMARY
