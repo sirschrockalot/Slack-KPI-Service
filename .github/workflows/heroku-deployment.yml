@@ -1,0 +1,175 @@
+name: Heroku Deployment
+
+# NEW WORKFLOW - Completely separate from old cached version
+# Uses official Heroku deploy action to resolve all CLI issues
+# Created: 2025-01-27-15-45-00
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch: # Allow manual triggering
+
+env:
+  NODE_VERSION: '18'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run tests
+      run: npm test
+    
+    - name: Check code quality
+      run: |
+        echo "Checking for common issues..."
+        if [ -f "package-lock.json" ]; then
+          echo "✅ package-lock.json exists"
+        else
+          echo "❌ package-lock.json missing"
+          exit 1
+        fi
+        
+        if [ -f "Procfile" ]; then
+          echo "✅ Procfile exists"
+        else
+          echo "❌ Procfile missing"
+          exit 1
+        fi
+        
+        if [ -f "app.json" ]; then
+          echo "✅ app.json exists"
+        else
+          echo "❌ app.json missing"
+          exit 1
+        fi
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Use Node.js ${{ env.NODE_VERSION }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Deploy to Heroku
+      uses: akhileshns/heroku-deploy@v3.12.14
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        branch: "main"
+        dontautocreate: true
+        usedocker: false
+        docker_heroku_process_type: "web"
+        healthcheck: "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+        checkstring: "healthy"
+        delay: 10
+        procfile: "Procfile"
+        appdir: "."
+    
+    - name: Verify deployment
+      run: |
+        echo "Waiting for app to be ready..."
+        sleep 30
+        
+        # Test health endpoint
+        HEALTH_URL="https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+        echo "Testing health endpoint: $HEALTH_URL"
+        
+        # Retry health check up to 5 times
+        for i in {1..5}; do
+          if curl -s "$HEALTH_URL" | grep -q "healthy"; then
+            echo "✅ Health check passed on attempt $i"
+            break
+          else
+            echo "⏳ Health check failed on attempt $i, retrying..."
+            sleep 10
+          fi
+        done
+        
+        # Final health check
+        if curl -s "$HEALTH_URL" | grep -q "healthy"; then
+          echo "🎉 Deployment successful! App is healthy."
+        else
+          echo "❌ Deployment verification failed. Check Heroku logs."
+          exit 1
+        fi
+    
+    - name: Post-deployment tests
+      run: |
+        echo "Running post-deployment tests..."
+        
+        # Test API endpoints (if JWT_SECRET is available)
+        if [ -n "${{ secrets.JWT_SECRET }}" ]; then
+          echo "Testing API endpoints..."
+          
+          # Generate JWT token
+          JWT_TOKEN=$(node -e "
+            const jwt = require('jsonwebtoken');
+            console.log(jwt.sign({user: 'github-actions'}, '${{ secrets.JWT_SECRET }}'));
+          ")
+          
+          # Test health endpoint
+          curl -s "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health"
+          
+          # Test status endpoint
+          curl -s "https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/status"
+          
+          echo "✅ Post-deployment tests completed"
+        else
+          echo "⚠️ JWT_SECRET not available, skipping API endpoint tests"
+        fi
+    
+    - name: Deployment summary
+      run: |
+        echo "## 🚀 Heroku Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**App Name**: ${{ secrets.HEROKU_APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "**App URL**: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com" >> $GITHUB_STEP_SUMMARY
+        echo "**Health Check**: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health" >> $GITHUB_STEP_SUMMARY
+        echo "**API Docs**: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/api-docs" >> $GITHUB_STEP_SUMMARY
+        echo "**Deployment Time**: $(date -u)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+        echo "1. Verify all API endpoints are working" >> $GITHUB_STEP_SUMMARY
+        echo "2. Check Heroku logs for any issues" >> $GITHUB_STEP_SUMMARY
+        echo "3. Monitor app performance and metrics" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Useful Commands" >> $GITHUB_STEP_SUMMARY
+        echo "```bash" >> $GITHUB_STEP_SUMMARY
+        echo "heroku logs --tail --app ${{ secrets.HEROKU_APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "heroku open --app ${{ secrets.HEROKU_APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "heroku ps --app ${{ secrets.HEROKU_APP_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
