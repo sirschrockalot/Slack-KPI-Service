@@ -1,5 +1,6 @@
 name: Deploy to Heroku
 
+# Force fresh workflow execution - Updated to use official Heroku deploy action
 on:
   push:
     branches: [ main, master ]
