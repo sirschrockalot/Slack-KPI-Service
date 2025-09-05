@@ -172,7 +172,16 @@ class AircallService {
       
       return userCalls;
     } catch (error) {
-      this.logger.error(`Error fetching calls for user ${userId}:`, error.message);
+      this.logger.error(`Error fetching calls for user ${userId}:`, {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          params: error.config?.params
+        }
+      });
       throw error;
     }
   }
@@ -279,6 +288,25 @@ class AircallService {
       // Get all users
       const users = await this.getUsers();
       this.logger.info(`Retrieved ${users.length} users for processing`);
+      
+      // Test API connection with a simple call first
+      try {
+        const testResponse = await this.aircallClient.get('/calls', {
+          params: {
+            from: timeRange.startTimestamp,
+            to: timeRange.endTimestamp,
+            per_page: 1,
+            page: 1
+          }
+        });
+        this.logger.info(`API test call successful: ${testResponse.data.calls?.length || 0} calls found in date range`);
+      } catch (testError) {
+        this.logger.error(`API test call failed:`, {
+          message: testError.message,
+          status: testError.response?.status,
+          data: testError.response?.data
+        });
+      }
       
       // Use more descriptive period name for night report (entire day)
       const periodName = timePeriod === 'night' ? 'Daily' : timePeriod;
