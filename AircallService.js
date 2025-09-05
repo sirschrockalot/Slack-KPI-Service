@@ -116,8 +116,8 @@ class AircallService {
             from: startTimestamp,
             to: endTimestamp,
             per_page: perPage,
-            page: page,
-            user_id: userId  // Try to filter by user ID directly
+            page: page
+            // Note: user_id parameter removed as it may not be supported by Aircall API
           }
         });
         
