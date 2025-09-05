@@ -111,15 +111,38 @@ class AircallService {
       });
       
       while (hasMore) {
-        const response = await this.aircallClient.get('/calls', {
-          params: {
-            from: startTimestamp,
-            to: endTimestamp,
-            per_page: perPage,
-            page: page
-            // Note: user_id parameter removed as it may not be supported by Aircall API
+        let response;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+          try {
+            response = await this.aircallClient.get('/calls', {
+              params: {
+                from: startTimestamp,
+                to: endTimestamp,
+                per_page: perPage,
+                page: page
+                // Note: user_id parameter removed as it may not be supported by Aircall API
+              }
+            });
+            break; // Success, exit retry loop
+          } catch (error) {
+            if (error.response?.status === 429 && retryCount < maxRetries - 1) {
+              // Rate limited, wait with exponential backoff
+              const waitTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+              this.logger.warn(`Rate limited for user ${userId}, page ${page}. Retrying in ${waitTime}ms...`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+              retryCount++;
+            } else {
+              throw error; // Re-throw if not rate limit or max retries reached
+            }
           }
-        });
+        }
+        
+        if (!response) {
+          throw new Error(`Failed to fetch data after ${maxRetries} retries`);
+        }
         
         const calls = response.data.calls || [];
         
@@ -145,6 +168,11 @@ class AircallService {
         
         hasMore = calls.length === perPage;
         page++;
+        
+        // Add small delay between pages to avoid rate limiting
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between pages
+        }
         
         if (page > 100) {
           this.logger.warn(`Reached maximum page limit for user ${userId}`);
@@ -318,12 +346,12 @@ class AircallService {
         users: []
       };
       
-      // Get activity for each user with rate limiting
+      // Get activity for each user with proper rate limiting
       for (const user of users) {
         try {
-          // Add small delay between API calls to avoid rate limiting
+          // Add longer delay between users to avoid rate limiting
           if (users.indexOf(user) > 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise(resolve => setTimeout(resolve, 2000)); // 2 second delay between users
           }
           
           const calls = await this.getUserCalls(user.id, timeRange.startTimestamp, timeRange.endTimestamp);
