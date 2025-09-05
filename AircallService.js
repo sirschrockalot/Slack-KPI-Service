@@ -37,7 +37,7 @@ class AircallService {
     this.aircallClient = axios.create({
       baseURL: this.aircallBaseUrl,
       headers: this.aircallHeaders,
-      timeout: 30000
+      timeout: 60000 // Increased timeout for large date ranges
     });
   }
   
@@ -257,9 +257,14 @@ class AircallService {
         users: []
       };
       
-      // Get activity for each user
+      // Get activity for each user with rate limiting
       for (const user of users) {
         try {
+          // Add small delay between API calls to avoid rate limiting
+          if (users.indexOf(user) > 0) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+          
           const calls = await this.getUserCalls(user.id, timeRange.startTimestamp, timeRange.endTimestamp);
           const callStats = this.processCallData(calls);
           

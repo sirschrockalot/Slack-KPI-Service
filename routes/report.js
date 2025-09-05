@@ -188,14 +188,31 @@ module.exports = (logger, generateReport, slackService) => {
       if (!errors.isEmpty()) {
         return res.status(400).json({ success: false, errors: errors.array() });
       }
+      
+      // Immediately respond to prevent timeout
+      res.json({ success: true, message: 'Custom report generation started. Check Slack for results.' });
+      
       try {
         const { startTime, endTime, reportName } = req.body;
         logger.info(`Custom report triggered: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
-        await generateReport(reportName || 'Custom', startTime, endTime);
-        res.json({ success: true, message: 'Custom report sent successfully' });
+        
+        // Process asynchronously to avoid timeout
+        setImmediate(async () => {
+          try {
+            const data = await generateReport(reportName || 'Custom', startTime, endTime);
+            const sent = await slackService.sendActivityReport(data);
+            if (sent) {
+              logger.info('Custom report sent to Slack successfully');
+            } else {
+              logger.error('Failed to send custom report to Slack');
+            }
+          } catch (error) {
+            logger.error('Error running custom report:', error.message);
+          }
+        });
+        
       } catch (error) {
-        logger.error('Error running custom report:', error.message);
-        res.status(500).json({ success: false, error: error.message });
+        logger.error('Error initiating custom report:', error.message);
       }
     }
   );
