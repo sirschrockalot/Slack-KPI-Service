@@ -98,7 +98,16 @@ class AircallService {
         from: startTimestamp,
         to: endTimestamp,
         per_page: perPage,
-        page: page
+        page: page,
+        user_id: userId
+      });
+      
+      // Also log the actual date strings for debugging
+      this.logger.info(`Date range for API call:`, {
+        startDate: new Date(startTimestamp * 1000).toISOString(),
+        endDate: new Date(endTimestamp * 1000).toISOString(),
+        startTimestamp,
+        endTimestamp
       });
       
       while (hasMore) {
@@ -107,11 +116,19 @@ class AircallService {
             from: startTimestamp,
             to: endTimestamp,
             per_page: perPage,
-            page: page
+            page: page,
+            user_id: userId  // Try to filter by user ID directly
           }
         });
         
         const calls = response.data.calls || [];
+        
+        // Debug: Log API response structure
+        this.logger.info(`API Response for user ${userId}, page ${page}:`, {
+          totalCalls: calls.length,
+          responseData: response.data,
+          hasCalls: calls.length > 0
+        });
         
         // Debug: Log first few calls to see if they're actually for the right user
         if (page === 1 && calls.length > 0) {
