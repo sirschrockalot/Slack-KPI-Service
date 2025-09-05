@@ -72,6 +72,42 @@ class SlackService {
   }
   
   /**
+   * Convert minutes to hours and minutes format
+   */
+  formatTimeInHoursAndMinutes(minutes) {
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = Math.round(minutes % 60);
+    
+    if (hours === 0) {
+      return `${remainingMinutes}m`;
+    } else if (remainingMinutes === 0) {
+      return `${hours}h`;
+    } else {
+      return `${hours}h ${remainingMinutes}m`;
+    }
+  }
+
+  /**
+   * Calculate working days between two dates (excluding weekends)
+   */
+  calculateWorkingDays(startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    let workingDays = 0;
+    
+    while (start <= end) {
+      const dayOfWeek = start.getDay();
+      // Count Monday (1) through Friday (5) as working days
+      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+        workingDays++;
+      }
+      start.setDate(start.getDate() + 1);
+    }
+    
+    return workingDays;
+  }
+
+  /**
    * Format activity data into Slack block format
    * Updated to reflect new metrics:
    * - Total calls = Outbound calls only
@@ -104,6 +140,10 @@ class SlackService {
     const totalInboundCalls = activityData.users.reduce((sum, user) => sum + (user.inboundCalls || 0), 0);
     const totalAnsweredInbound = activityData.users.reduce((sum, user) => sum + (user.answeredInboundCalls || 0), 0);
     
+    // Calculate working days and average daily talk time
+    const workingDays = this.calculateWorkingDays(activityData.startTime, activityData.endTime);
+    const avgDailyTalkTime = workingDays > 0 ? totalTalkTime / workingDays : 0;
+    
     // Create header with custom title for Daily reports
     const reportTitle = period === 'Daily' ? 'End of Day Report' : period;
     const blocks = [
@@ -134,7 +174,14 @@ class SlackService {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `📥 *Inbound Summary:* ${totalInboundCalls} calls • ${totalAnsweredInbound} answered • ${Math.round(totalTalkTime)} min total talk time`
+          text: `📥 *Inbound Summary:* ${totalInboundCalls} calls • ${totalAnsweredInbound} answered • ${this.formatTimeInHoursAndMinutes(totalTalkTime)} total talk time`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📊 *Period Analysis:* ${workingDays} working days • ${this.formatTimeInHoursAndMinutes(avgDailyTalkTime)} avg daily talk time`
         }
       },
       {
@@ -192,6 +239,7 @@ class SlackService {
     sortedUsers.forEach((user, index) => {
       const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
       const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
+      const userAvgDailyTalkTime = workingDays > 0 ? user.totalDurationMinutes / workingDays : 0;
       
       // Log individual user data for debugging
       this.logger.info(`SlackService: Processing user ${index + 1}/${sortedUsers.length}:`, {
@@ -248,7 +296,11 @@ class SlackService {
           },
           {
             type: 'mrkdwn',
-            text: `⏰ *${user.totalDurationMinutes}* min total talk time`
+            text: `⏰ *${this.formatTimeInHoursAndMinutes(user.totalDurationMinutes)}* total talk time`
+          },
+          {
+            type: 'mrkdwn',
+            text: `📊 *${this.formatTimeInHoursAndMinutes(userAvgDailyTalkTime)}* avg daily talk time`
           }
         ]
       };
