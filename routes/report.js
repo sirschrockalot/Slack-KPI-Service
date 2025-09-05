@@ -199,7 +199,26 @@ module.exports = (logger, generateReport, slackService) => {
         // Process asynchronously to avoid timeout
         setImmediate(async () => {
           try {
+            logger.info(`Starting custom report generation: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
             const data = await generateReport(reportName || 'Custom', startTime, endTime);
+            
+            // Debug: Log the data structure to see if users have data
+            logger.info('DEBUG: Custom report data structure:', {
+              period: data.period,
+              startTime: data.startTime,
+              endTime: data.endTime,
+              userCount: data.users ? data.users.length : 0,
+              users: data.users ? data.users.map(u => ({
+                name: u.name,
+                user_id: u.user_id,
+                totalCalls: u.totalCalls,
+                answeredCalls: u.answeredCalls,
+                totalDurationMinutes: u.totalDurationMinutes,
+                outboundCalls: u.outboundCalls,
+                inboundCalls: u.inboundCalls
+              })) : []
+            });
+            
             const sent = await slackService.sendActivityReport(data);
             if (sent) {
               logger.info('Custom report sent to Slack successfully');
@@ -208,6 +227,7 @@ module.exports = (logger, generateReport, slackService) => {
             }
           } catch (error) {
             logger.error('Error running custom report:', error.message);
+            logger.error('Custom report error stack:', error.stack);
           }
         });
         

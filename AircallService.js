@@ -139,6 +139,20 @@ class AircallService {
       const userCalls = allCalls.filter(call => call.user && call.user.id === userId);
       
       this.logger.info(`Fetched ${allCalls.length} total calls, filtered to ${userCalls.length} calls for user ${userId} (${startTimestamp} to ${endTimestamp})`);
+      
+      // Debug: Log sample calls to see what we're getting
+      if (userCalls.length > 0) {
+        this.logger.info(`Sample call for user ${userId}:`, {
+          callId: userCalls[0].id,
+          direction: userCalls[0].direction,
+          answered_at: userCalls[0].answered_at,
+          duration: userCalls[0].duration,
+          created_at: userCalls[0].created_at
+        });
+      } else {
+        this.logger.info(`No calls found for user ${userId} in date range ${startTimestamp} to ${endTimestamp}`);
+      }
+      
       return userCalls;
     } catch (error) {
       this.logger.error(`Error fetching calls for user ${userId}:`, error.message);
@@ -243,9 +257,11 @@ class AircallService {
       const timeRange = this.getTimeRange(timePeriod, customStart, customEnd);
       
       this.logger.info(`Fetching ${timePeriod} activity from ${timeRange.startTime.toISOString()} to ${timeRange.endTime.toISOString()}`);
+      this.logger.info(`Time range timestamps: ${timeRange.startTimestamp} to ${timeRange.endTimestamp}`);
       
       // Get all users
       const users = await this.getUsers();
+      this.logger.info(`Retrieved ${users.length} users for processing`);
       
       // Use more descriptive period name for night report (entire day)
       const periodName = timePeriod === 'night' ? 'Daily' : timePeriod;
