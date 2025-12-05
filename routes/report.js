@@ -181,6 +181,7 @@ module.exports = (logger, generateReport, slackService) => {
     [
       body('startTime').exists().withMessage('startTime is required').isISO8601().withMessage('startTime must be ISO8601'),
       body('endTime').exists().withMessage('endTime is required').isISO8601().withMessage('endTime must be ISO8601'),
+      body('returnRaw').optional().isBoolean().withMessage('returnRaw must be boolean'),
       body('reportName').optional().isString().trim().escape(),
     ],
     async (req, res) => {
@@ -188,19 +189,50 @@ module.exports = (logger, generateReport, slackService) => {
       if (!errors.isEmpty()) {
         return res.status(400).json({ success: false, errors: errors.array() });
       }
-      
-      // Immediately respond to prevent timeout
-      res.json({ success: true, message: 'Custom report generation started. Check Slack for results.' });
-      
       try {
-        const { startTime, endTime, reportName } = req.body;
-        logger.info(`Custom report triggered: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
-        
+        const { startTime, endTime, reportName, returnRaw } = req.body;
+        const name = reportName || 'Custom';
+
+        // If returnRaw is true, synchronously return data and do not send to Slack
+        if (returnRaw === true || returnRaw === 'true') {
+          logger.info(`Custom raw report requested: ${name} from ${startTime} to ${endTime}`);
+          const data = await generateReport(name, startTime, endTime);
+          return res.json({
+            success: true,
+            data: {
+              period: data.period,
+              startTime: data.startTime,
+              endTime: data.endTime,
+              userCount: data.users ? data.users.length : 0,
+              users: data.users ? data.users.map(u => ({
+                name: u.name,
+                user_id: u.user_id,
+                email: u.email,
+                totalCalls: u.totalCalls,
+                answeredCalls: u.answeredCalls,
+                missedCalls: u.missedCalls,
+                totalDurationMinutes: u.totalDurationMinutes,
+                outboundCalls: u.outboundCalls,
+                answeredOutboundCalls: u.answeredOutboundCalls,
+                inboundCalls: u.inboundCalls,
+                answeredInboundCalls: u.answeredInboundCalls,
+                inboundDurationMinutes: u.inboundDurationMinutes,
+                outboundDurationMinutes: u.outboundDurationMinutes,
+                callCount: u.calls ? u.calls.length : 0
+              })) : []
+            }
+          });
+        }
+
+        // Default behavior: fire-and-forget, send to Slack, and respond immediately
+        res.json({ success: true, message: 'Custom report generation started. Check Slack for results.' });
+        logger.info(`Custom report triggered: ${name} from ${startTime} to ${endTime}`);
+
         // Process asynchronously to avoid timeout
         setImmediate(async () => {
           try {
-            logger.info(`Starting custom report generation: ${reportName || 'Custom'} from ${startTime} to ${endTime}`);
-            const data = await generateReport(reportName || 'Custom', startTime, endTime);
+            logger.info(`Starting custom report generation: ${name} from ${startTime} to ${endTime}`);
+            const data = await generateReport(name, startTime, endTime);
             
             // Debug: Log the data structure to see if users have data
             logger.info('DEBUG: Custom report data structure:', {
@@ -230,9 +262,11 @@ module.exports = (logger, generateReport, slackService) => {
             logger.error('Custom report error stack:', error.stack);
           }
         });
-        
       } catch (error) {
         logger.error('Error initiating custom report:', error.message);
+        if (!res.headersSent) {
+          return res.status(500).json({ success: false, error: error.message });
+        }
       }
     }
   );
@@ -329,6 +363,8 @@ module.exports = (logger, generateReport, slackService) => {
       res.status(500).json({ success: false, error: error.message });
     }
   });
+
+  // Removed GET /report/custom/raw in favor of returnRaw flag on POST /report/custom
 
   return router;
 }; 

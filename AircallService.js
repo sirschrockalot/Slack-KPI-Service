@@ -3,10 +3,12 @@ const winston = require('winston');
 const { Buffer } = require('buffer');
 
 class AircallService {
-  constructor(aircallApiId, aircallApiToken, excludedUsers = []) {
+  constructor(aircallApiId, aircallApiToken, excludedUsers = [], dispoAgents = [], acquisitionAgents = []) {
     this.aircallApiId = aircallApiId;
     this.aircallApiToken = aircallApiToken;
     this.excludedUsers = excludedUsers;
+    this.dispoAgents = dispoAgents;
+    this.acquisitionAgents = acquisitionAgents;
     this.aircallBaseUrl = 'https://api.aircall.io/v1';
     
     this.logger = winston.createLogger({
@@ -57,6 +59,36 @@ class AircallService {
       userName.toLowerCase().includes(excludedName.toLowerCase()) ||
       excludedName.toLowerCase().includes(userName.toLowerCase())
     );
+  }
+  
+  /**
+   * Determine agent category based on name
+   * Returns 'dispo', 'acquisition', or 'other'
+   */
+  getAgentCategory(userName) {
+    const nameLower = userName.toLowerCase();
+    
+    // Check if user is a Dispo agent
+    const isDispo = this.dispoAgents.some(agentName => 
+      nameLower.includes(agentName.toLowerCase()) ||
+      agentName.toLowerCase().includes(nameLower)
+    );
+    
+    if (isDispo) {
+      return 'dispo';
+    }
+    
+    // Check if user is an Acquisition agent
+    const isAcquisition = this.acquisitionAgents.some(agentName => 
+      nameLower.includes(agentName.toLowerCase()) ||
+      agentName.toLowerCase().includes(nameLower)
+    );
+    
+    if (isAcquisition) {
+      return 'acquisition';
+    }
+    
+    return 'other';
   }
   
   /**
@@ -363,7 +395,8 @@ class AircallService {
             email: user.email,
             calls: calls,
             ...callStats,
-            availability: user.availability_status || 'unknown'
+            availability: user.availability_status || 'unknown',
+            agentCategory: this.getAgentCategory(user.name)
           };
           
           activitySummary.users.push(userActivity);
@@ -399,6 +432,7 @@ class AircallService {
             inboundDurationMinutes: 0,
             outboundDurationMinutes: 0,
             availability: user.availability_status || 'unknown',
+            agentCategory: this.getAgentCategory(user.name),
             error: 'Failed to fetch call data'
           });
         }

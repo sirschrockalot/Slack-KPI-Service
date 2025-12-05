@@ -2,9 +2,11 @@ const axios = require('axios');
 const winston = require('winston');
 
 class SlackService {
-  constructor(slackApiToken, slackChannelId) {
+  constructor(slackApiToken, slackChannelId, dispoAgents = [], acquisitionAgents = []) {
     this.slackApiToken = slackApiToken;
     this.slackChannelId = slackChannelId;
+    this.dispoAgents = dispoAgents;
+    this.acquisitionAgents = acquisitionAgents;
     this.slackBaseUrl = 'https://slack.com/api';
     
     this.logger = winston.createLogger({
@@ -189,45 +191,79 @@ class SlackService {
       }
     ];
     
-    // Sort users by total outbound calls (descending) for better presentation
-    const sortedUsers = [...activityData.users].sort((a, b) => b.totalCalls - a.totalCalls);
+    // Categorize users by agent type
+    const dispoUsers = activityData.users.filter(user => user.agentCategory === 'dispo');
+    const acquisitionUsers = activityData.users.filter(user => user.agentCategory === 'acquisition');
+    const otherUsers = activityData.users.filter(user => !user.agentCategory || user.agentCategory === 'other');
+    
+    // Sort each category by total outbound calls (descending)
+    const sortedDispoUsers = [...dispoUsers].sort((a, b) => b.totalCalls - a.totalCalls);
+    const sortedAcquisitionUsers = [...acquisitionUsers].sort((a, b) => b.totalCalls - a.totalCalls);
+    const sortedOtherUsers = [...otherUsers].sort((a, b) => b.totalCalls - a.totalCalls);
+    
+    // KPI thresholds
+    const dispoKpiDials = 60;
+    const dispoKpiTalkTimeMinutes = 60;
+    // Acquisition agents: 50 dials/day AND 3 hours (180 minutes) talk time/day
+    const acquisitionKpiDials = 50;
+    const acquisitionKpiTalkTimeMinutes = 180; // 3 hours
+    
+    // Helper function to check if Dispo agent meets KPIs (BOTH must be met)
+    const dispoMeetsKPIs = (user) => {
+      return user.totalCalls >= dispoKpiDials && user.totalDurationMinutes >= dispoKpiTalkTimeMinutes;
+    };
+    
+    // Helper function to check if Acquisition agent meets KPIs
+    // TODO: Update when Acquisition KPI requirements are provided
+    const acquisitionMeetsKPIs = (user) => {
+      return user.totalCalls >= acquisitionKpiDials && user.totalDurationMinutes >= acquisitionKpiTalkTimeMinutes;
+    };
     
     // Add KPI summary for end of day report
     if (period === 'Daily') {
-      const kpiOutboundCalls = 80; // Updated to 80 outbound calls
-      const kpiTalkTimeMinutes = 120; // 2 hours
+      const dispoNotMeetingKPIs = sortedDispoUsers.filter(user => !dispoMeetsKPIs(user));
+      const acquisitionNotMeetingKPIs = sortedAcquisitionUsers.filter(user => !acquisitionMeetsKPIs(user));
       
-      // New KPI logic: Only flag if under 2 hours AND under 80 outbound calls
-      const usersNotMeetingKPIs = sortedUsers.filter(user => {
-        const hasEnoughTalkTime = user.totalDurationMinutes >= kpiTalkTimeMinutes;
-        const hasEnoughOutboundCalls = user.totalCalls >= kpiOutboundCalls;
-        
-        // Flag only if BOTH conditions are not met (under 2 hours AND under 80 calls)
-        return !hasEnoughTalkTime && !hasEnoughOutboundCalls;
-      });
-      
-      if (usersNotMeetingKPIs.length > 0) {
+      if (dispoNotMeetingKPIs.length > 0 || acquisitionNotMeetingKPIs.length > 0) {
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `🚨 *KPI Alert:* ${usersNotMeetingKPIs.length} user(s) have not met daily KPIs (80 outbound calls AND 2 hours talk time)`
+            text: `🚨 *KPI Alert:* ${dispoNotMeetingKPIs.length + acquisitionNotMeetingKPIs.length} agent(s) have not met daily KPIs`
           }
         });
         
-        const kpiAlertText = usersNotMeetingKPIs.map(user => {
-          const outboundDeficit = Math.max(0, kpiOutboundCalls - user.totalCalls);
-          const talkTimeDeficit = Math.max(0, kpiTalkTimeMinutes - user.totalDurationMinutes);
-          return `🔸 *${user.name}*: ${outboundDeficit} more calls, ${talkTimeDeficit} more minutes needed`;
-        }).join('\n');
+        if (dispoNotMeetingKPIs.length > 0) {
+          const dispoAlertText = dispoNotMeetingKPIs.map(user => {
+            const dialsDeficit = Math.max(0, dispoKpiDials - user.totalCalls);
+            const talkTimeDeficit = Math.max(0, dispoKpiTalkTimeMinutes - user.totalDurationMinutes);
+            return `🔸 *${user.name}* (Dispo): ${dialsDeficit} more dials, ${talkTimeDeficit} more minutes needed`;
+          }).join('\n');
+          
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Dispo Agents:*\n${dispoAlertText}`
+            }
+          });
+        }
         
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: kpiAlertText
-          }
-        });
+        if (acquisitionNotMeetingKPIs.length > 0) {
+          const acquisitionAlertText = acquisitionNotMeetingKPIs.map(user => {
+            const dialsDeficit = Math.max(0, acquisitionKpiDials - user.totalCalls);
+            const talkTimeDeficit = Math.max(0, acquisitionKpiTalkTimeMinutes - user.totalDurationMinutes);
+            return `🔸 *${user.name}* (Acquisition): ${dialsDeficit} more dials, ${talkTimeDeficit} more minutes needed`;
+          }).join('\n');
+          
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Acquisition Agents:*\n${acquisitionAlertText}`
+            }
+          });
+        }
         
         blocks.push({
           type: 'divider'
@@ -235,14 +271,14 @@ class SlackService {
       }
     }
     
-    // Add user activity with improved formatting
-    sortedUsers.forEach((user, index) => {
+    // Helper function to add user activity block
+    const addUserBlock = (user, index, totalUsers) => {
       const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
       const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
       const userAvgDailyTalkTime = workingDays > 0 ? user.totalDurationMinutes / workingDays : 0;
       
       // Log individual user data for debugging
-      this.logger.info(`SlackService: Processing user ${index + 1}/${sortedUsers.length}:`, {
+      this.logger.info(`SlackService: Processing user ${index + 1}/${totalUsers}:`, {
         name: user.name,
         totalCalls: user.totalCalls,
         answeredCalls: user.answeredCalls,
@@ -251,32 +287,35 @@ class SlackService {
         totalDurationMinutes: user.totalDurationMinutes
       });
       
-      // Check KPI requirements for end of day report
-      const kpiOutboundCalls = 80; // Updated to 80 outbound calls
-      const kpiTalkTimeMinutes = 120; // 2 hours
+      // Determine KPI thresholds based on agent category
+      let kpiDials, kpiTalkTimeMinutes, meetsKPIs;
       
-      // New KPI logic: Only flag if under 2 hours AND under 80 outbound calls
-      const hasEnoughTalkTime = user.totalDurationMinutes >= kpiTalkTimeMinutes;
-      const hasEnoughOutboundCalls = user.totalCalls >= kpiOutboundCalls;
-      const meetsKPIs = hasEnoughTalkTime || hasEnoughOutboundCalls; // Pass if EITHER condition is met
+      if (user.agentCategory === 'dispo') {
+        kpiDials = dispoKpiDials;
+        kpiTalkTimeMinutes = dispoKpiTalkTimeMinutes;
+        meetsKPIs = dispoMeetsKPIs(user);
+      } else if (user.agentCategory === 'acquisition') {
+        kpiDials = acquisitionKpiDials;
+        kpiTalkTimeMinutes = acquisitionKpiTalkTimeMinutes;
+        meetsKPIs = acquisitionMeetsKPIs(user);
+      } else {
+        // Other users - no KPI requirements
+        kpiDials = 0;
+        kpiTalkTimeMinutes = 0;
+        meetsKPIs = true;
+      }
       
       // Create KPI status indicators
-      const outboundStatus = hasEnoughOutboundCalls ? '✅' : '❌';
-      const talkTimeStatus = hasEnoughTalkTime ? '✅' : '❌';
+      const dialsStatus = kpiDials > 0 ? (user.totalCalls >= kpiDials ? '✅' : '❌') : '';
+      const talkTimeStatus = kpiTalkTimeMinutes > 0 ? (user.totalDurationMinutes >= kpiTalkTimeMinutes ? '✅' : '❌') : '';
       const overallStatus = meetsKPIs ? '✅' : '❌';
-      
-      // Add KPI flagging for end of day report with improved formatting
-      let kpiText = '';
-      if (period === 'Daily') {
-        kpiText = `\n${overallStatus} *KPI Status:* ${outboundStatus} Outbound (${user.totalCalls}/${kpiOutboundCalls}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`;
-      }
       
       const userBlock = {
         type: 'section',
         fields: [
           {
             type: 'mrkdwn',
-            text: `*${user.name}*`
+            text: `*${user.name}*${user.agentCategory ? ` (${user.agentCategory.charAt(0).toUpperCase() + user.agentCategory.slice(1)})` : ''}`
           },
           {
             type: 'mrkdwn',
@@ -316,20 +355,20 @@ class SlackService {
       blocks.push(userBlock);
       
       // Add KPI status section for end of day report
-      if (period === 'Daily') {
+      if (period === 'Daily' && kpiDials > 0) {
         blocks.push({
           type: 'context',
           elements: [
             {
               type: 'mrkdwn',
-              text: `${overallStatus} *KPI Status:* ${outboundStatus} Outbound (${user.totalCalls}/${kpiOutboundCalls}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`
+              text: `${overallStatus} *KPI Status:* ${dialsStatus} Dials (${user.totalCalls}/${kpiDials}) | ${talkTimeStatus} Talk Time (${user.totalDurationMinutes}/${kpiTalkTimeMinutes} min)`
             }
           ]
         });
       }
       
       // Add separator between users (except for the last one)
-      if (index < sortedUsers.length - 1) {
+      if (index < totalUsers - 1) {
         blocks.push({
           type: 'context',
           elements: [
@@ -340,7 +379,112 @@ class SlackService {
           ]
         });
       }
-    });
+    };
+    
+    // Add Dispo agents section
+    if (sortedDispoUsers.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Dispo Agents* (${sortedDispoUsers.length}) - KPI: ${dispoKpiDials}+ dials/day AND ${dispoKpiTalkTimeMinutes}+ min talk time/day`
+        }
+      });
+      blocks.push({
+        type: 'divider'
+      });
+      
+      sortedDispoUsers.forEach((user, index) => {
+        const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
+        const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
+        const userAvgDailyTalkTime = workingDays > 0 ? user.totalDurationMinutes / workingDays : 0;
+        
+        this.logger.info(`SlackService: Processing Dispo agent ${index + 1}/${sortedDispoUsers.length}:`, {
+          name: user.name,
+          totalCalls: user.totalCalls,
+          answeredCalls: user.answeredCalls,
+          inboundCalls: user.inboundCalls || 0,
+          answeredInboundCalls: user.answeredInboundCalls || 0,
+          totalDurationMinutes: user.totalDurationMinutes
+        });
+        
+        addUserBlock(user, index, sortedDispoUsers.length);
+      });
+      
+      if (sortedAcquisitionUsers.length > 0 || sortedOtherUsers.length > 0) {
+        blocks.push({
+          type: 'divider'
+        });
+      }
+    }
+    
+    // Add Acquisition agents section
+    if (sortedAcquisitionUsers.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Acquisition Agents* (${sortedAcquisitionUsers.length}) - KPI: ${acquisitionKpiDials}+ dials/day AND ${this.formatTimeInHoursAndMinutes(acquisitionKpiTalkTimeMinutes)} talk time/day`
+        }
+      });
+      blocks.push({
+        type: 'divider'
+      });
+      
+      sortedAcquisitionUsers.forEach((user, index) => {
+        const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
+        const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
+        const userAvgDailyTalkTime = workingDays > 0 ? user.totalDurationMinutes / workingDays : 0;
+        
+        this.logger.info(`SlackService: Processing Acquisition agent ${index + 1}/${sortedAcquisitionUsers.length}:`, {
+          name: user.name,
+          totalCalls: user.totalCalls,
+          answeredCalls: user.answeredCalls,
+          inboundCalls: user.inboundCalls || 0,
+          answeredInboundCalls: user.answeredInboundCalls || 0,
+          totalDurationMinutes: user.totalDurationMinutes
+        });
+        
+        addUserBlock(user, index, sortedAcquisitionUsers.length);
+      });
+      
+      if (sortedOtherUsers.length > 0) {
+        blocks.push({
+          type: 'divider'
+        });
+      }
+    }
+    
+    // Add Other users section (if any)
+    if (sortedOtherUsers.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Other Users* (${sortedOtherUsers.length})`
+        }
+      });
+      blocks.push({
+        type: 'divider'
+      });
+      
+      sortedOtherUsers.forEach((user, index) => {
+        const userAnswerRate = user.totalCalls > 0 ? Math.round((user.answeredCalls / user.totalCalls) * 100) : 0;
+        const inboundAnswerRate = (user.inboundCalls || 0) > 0 ? Math.round(((user.answeredInboundCalls || 0) / (user.inboundCalls || 0)) * 100) : 0;
+        const userAvgDailyTalkTime = workingDays > 0 ? user.totalDurationMinutes / workingDays : 0;
+        
+        this.logger.info(`SlackService: Processing other user ${index + 1}/${sortedOtherUsers.length}:`, {
+          name: user.name,
+          totalCalls: user.totalCalls,
+          answeredCalls: user.answeredCalls,
+          inboundCalls: user.inboundCalls || 0,
+          answeredInboundCalls: user.answeredInboundCalls || 0,
+          totalDurationMinutes: user.totalDurationMinutes
+        });
+        
+        addUserBlock(user, index, sortedOtherUsers.length);
+      });
+    }
     
     // Add detailed breakdown section
     blocks.push({

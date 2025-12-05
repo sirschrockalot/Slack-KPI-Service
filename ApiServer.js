@@ -62,6 +62,14 @@ class ApiServer {
     const excludedUsersEnv = process.env.EXCLUDED_USERS || process.env.INPUT_EXCLUDED_USERS || 'Joel Schrock';
     this.config.excludedUsers = excludedUsersEnv.split(',').map(name => name.trim()).filter(name => name);
     
+    // Parse Dispo agents
+    const dispoAgentsEnv = process.env.DISPO_AGENTS || process.env.INPUT_DISPO_AGENTS || '';
+    this.config.dispoAgents = dispoAgentsEnv.split(',').map(name => name.trim()).filter(name => name);
+    
+    // Parse Acquisition agents
+    const acquisitionAgentsEnv = process.env.ACQUISITION_AGENTS || process.env.INPUT_ACQUISITION_AGENTS || '';
+    this.config.acquisitionAgents = acquisitionAgentsEnv.split(',').map(name => name.trim()).filter(name => name);
+    
     // Validate required environment variables
     this.validateConfiguration();
     
@@ -72,6 +80,8 @@ class ApiServer {
     this.logger.info('✓ SLACK_API_TOKEN:', this.config.slackApiToken ? 'configured' : 'missing');
     this.logger.info('✓ SLACK_CHANNEL_ID:', this.config.slackChannelId ? 'configured' : 'missing');
     this.logger.info('✓ EXCLUDED_USERS:', this.config.excludedUsers.join(', '));
+    this.logger.info('✓ DISPO_AGENTS:', this.config.dispoAgents.length > 0 ? `${this.config.dispoAgents.length} configured` : 'none');
+    this.logger.info('✓ ACQUISITION_AGENTS:', this.config.acquisitionAgents.length > 0 ? `${this.config.acquisitionAgents.length} configured` : 'none');
   }
   
   /**
@@ -93,13 +103,17 @@ class ApiServer {
   initializeServices() {
     this.slackService = new SlackService(
       this.config.slackApiToken,
-      this.config.slackChannelId
+      this.config.slackChannelId,
+      this.config.dispoAgents,
+      this.config.acquisitionAgents
     );
     
     this.aircallService = new AircallService(
       this.config.aircallApiId,
       this.config.aircallApiToken,
-      this.config.excludedUsers
+      this.config.excludedUsers,
+      this.config.dispoAgents,
+      this.config.acquisitionAgents
     );
 
     // Removed: Initialize report scheduler
