@@ -452,5 +452,167 @@ module.exports = (logger, generateReport, slackService) => {
 
   // Removed GET /report/custom/raw in favor of returnRaw flag on POST /report/custom
 
+  /**
+   * Helper function to get current week range (Monday to Friday)
+   */
+  const getCurrentWeekRange = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    
+    // Calculate days to subtract to get to Monday
+    // If today is Sunday (0), go back 6 days to get last Monday
+    // If today is Monday (1), go back 0 days
+    // If today is Tuesday (2), go back 1 day, etc.
+    const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    
+    // Get Monday of current week
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - daysToMonday);
+    monday.setHours(0, 0, 0, 0);
+    
+    // Get Friday of current week
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4); // Monday + 4 days = Friday
+    friday.setHours(23, 59, 59, 999);
+    
+    return {
+      startTime: monday,
+      endTime: friday,
+      startTimeISO: monday.toISOString(),
+      endTimeISO: friday.toISOString()
+    };
+  };
+
+  /**
+   * @swagger
+   * /report/weekly-avg:
+   *   post:
+   *     summary: Generate and send weekly average report
+   *     description: Generates a weekly average report for the current week (Monday-Friday) and sends it to Slack. Calculates daily averages and checks Dispo agent KPIs.
+   *     tags: [Reports]
+   *     security:
+   *       - bearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Report sent successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Success'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/Error'
+   */
+  router.post('/report/weekly-avg', async (req, res) => {
+    try {
+      logger.info('Weekly average report triggered via API');
+      
+      // Get current week range (Monday to Friday)
+      const weekRange = getCurrentWeekRange();
+      logger.info(`Weekly report: ${weekRange.startTimeISO} to ${weekRange.endTimeISO}`);
+      
+      // Get data for the week
+      const data = await generateReport('Weekly Average', weekRange.startTimeISO, weekRange.endTimeISO);
+      
+      // Calculate daily averages (5 working days: Monday-Friday)
+      const workingDays = 5;
+      const organized = organizeUsersByCategory(data.users || []);
+      
+      // Process each category and calculate averages
+      const processWeeklyData = (users) => {
+        return users.map(user => {
+          const avgDialsPerDay = workingDays > 0 ? (user.totalCalls / workingDays) : 0;
+          const avgTalkTimePerDay = workingDays > 0 ? (user.totalDurationMinutes / workingDays) : 0;
+          
+          return {
+            ...formatUserData(user),
+            weeklyTotal: {
+              totalCalls: user.totalCalls,
+              totalDurationMinutes: user.totalDurationMinutes,
+              answeredCalls: user.answeredCalls,
+              inboundCalls: user.inboundCalls || 0,
+              outboundCalls: user.outboundCalls || 0
+            },
+            dailyAverage: {
+              dialsPerDay: Math.round(avgDialsPerDay * 100) / 100,
+              talkTimePerDay: Math.round(avgTalkTimePerDay * 100) / 100
+            },
+            workingDays: workingDays
+          };
+        });
+      };
+      
+      const processedDispo = processWeeklyData(organized.dispoAgents);
+      const processedAcquisition = processWeeklyData(organized.acquisitionAgents);
+      const processedOther = processWeeklyData(organized.otherUsers);
+      
+      // Check Dispo agent KPIs (avg 60+ min talk time/day AND avg 60+ dials/day)
+      const dispoKpiTalkTime = 60; // minutes per day
+      const dispoKpiDials = 60; // dials per day
+      
+      const dispoNotMeetingKPIs = processedDispo.filter(agent => {
+        return agent.dailyAverage.talkTimePerDay < dispoKpiTalkTime || 
+               agent.dailyAverage.dialsPerDay < dispoKpiDials;
+      });
+      
+      // Prepare data for Slack
+      const weeklyData = {
+        period: 'Weekly Average',
+        startTime: weekRange.startTimeISO,
+        endTime: weekRange.endTimeISO,
+        workingDays: workingDays,
+        summary: {
+          totalUsers: organized.totalUsers,
+          dispoCount: organized.dispoCount,
+          acquisitionCount: organized.acquisitionCount,
+          otherCount: organized.otherCount,
+          dispoNotMeetingKPIs: dispoNotMeetingKPIs.length
+        },
+        dispoAgents: processedDispo,
+        acquisitionAgents: processedAcquisition,
+        otherUsers: processedOther,
+        kpiThresholds: {
+          dispo: {
+            dialsPerDay: dispoKpiDials,
+            talkTimePerDay: dispoKpiTalkTime
+          }
+        }
+      };
+      
+      // Send to Slack
+      const sent = await slackService.sendWeeklyAverageReport(weeklyData);
+      
+      if (sent) {
+        logger.info('Weekly average report sent to Slack successfully');
+        res.json({ 
+          success: true, 
+          message: 'Weekly average report sent to Slack successfully',
+          data: {
+            period: weeklyData.period,
+            startTime: weeklyData.startTime,
+            endTime: weeklyData.endTime,
+            workingDays: weeklyData.workingDays,
+            summary: weeklyData.summary
+          }
+        });
+      } else {
+        logger.error('Failed to send weekly average report to Slack');
+        res.status(500).json({ success: false, error: 'Failed to send weekly average report to Slack' });
+      }
+    } catch (error) {
+      logger.error('Error running weekly average report:', error.message);
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   return router;
 }; 

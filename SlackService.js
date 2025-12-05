@@ -580,6 +580,283 @@ class SlackService {
     
     return await this.sendMessage(message);
   }
+  
+  /**
+   * Format weekly average data into Slack block format
+   */
+  formatWeeklyAverageMessage(weeklyData) {
+    const startTime = new Date(weeklyData.startTime).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    const endTime = new Date(weeklyData.endTime).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+    
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '📊 Weekly Average Report'
+        }
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `📅 *Week:* ${startTime} - ${endTime} (${weeklyData.workingDays} working days)`
+          }
+        ]
+      },
+      {
+        type: 'divider'
+      }
+    ];
+    
+    // Dispo Agents Section
+    if (weeklyData.dispoAgents.length > 0) {
+      const dispoKpiTalkTime = weeklyData.kpiThresholds.dispo.talkTimePerDay;
+      const dispoKpiDials = weeklyData.kpiThresholds.dispo.dialsPerDay;
+      
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Dispo Agents* (${weeklyData.dispoAgents.length}) - KPI: Avg ${dispoKpiDials}+ dials/day AND Avg ${dispoKpiTalkTime}+ min talk time/day`
+        }
+      });
+      
+      // KPI Alert for Dispo agents
+      const dispoNotMeetingKPIs = weeklyData.dispoAgents.filter(agent => {
+        return agent.dailyAverage.talkTimePerDay < dispoKpiTalkTime || 
+               agent.dailyAverage.dialsPerDay < dispoKpiDials;
+      });
+      
+      if (dispoNotMeetingKPIs.length > 0) {
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `🚨 *KPI Alert:* ${dispoNotMeetingKPIs.length} Dispo agent(s) have not met weekly average KPIs`
+          }
+        });
+        
+        const dispoAlertText = dispoNotMeetingKPIs.map(agent => {
+          const dialsDeficit = Math.max(0, dispoKpiDials - agent.dailyAverage.dialsPerDay);
+          const talkTimeDeficit = Math.max(0, dispoKpiTalkTime - agent.dailyAverage.talkTimePerDay);
+          return `🔸 *${agent.name}*: ${dialsDeficit.toFixed(1)} more dials/day avg, ${talkTimeDeficit.toFixed(1)} more min/day avg needed`;
+        }).join('\n');
+        
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: dispoAlertText
+          }
+        });
+        
+        blocks.push({
+          type: 'divider'
+        });
+      }
+      
+      // Dispo agent details
+      weeklyData.dispoAgents.forEach((agent, index) => {
+        const meetsTalkTime = agent.dailyAverage.talkTimePerDay >= dispoKpiTalkTime;
+        const meetsDials = agent.dailyAverage.dialsPerDay >= dispoKpiDials;
+        const meetsKPIs = meetsTalkTime && meetsDials;
+        
+        const talkTimeStatus = meetsTalkTime ? '✅' : '❌';
+        const dialsStatus = meetsDials ? '✅' : '❌';
+        const overallStatus = meetsKPIs ? '✅' : '❌';
+        
+        blocks.push({
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*${agent.name}* (Dispo)`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📊 *Weekly Total:* ${agent.weeklyTotal.totalCalls} dials, ${this.formatTimeInHoursAndMinutes(agent.weeklyTotal.totalDurationMinutes)} talk time`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📈 *Daily Average:* ${agent.dailyAverage.dialsPerDay.toFixed(1)} dials/day, ${this.formatTimeInHoursAndMinutes(agent.dailyAverage.talkTimePerDay)} talk time/day`
+            },
+            {
+              type: 'mrkdwn',
+              text: `${overallStatus} *KPI Status:* ${dialsStatus} Dials (${agent.dailyAverage.dialsPerDay.toFixed(1)}/${dispoKpiDials}) | ${talkTimeStatus} Talk Time (${agent.dailyAverage.talkTimePerDay.toFixed(1)}/${dispoKpiTalkTime} min)`
+            }
+          ]
+        });
+        
+        if (index < weeklyData.dispoAgents.length - 1) {
+          blocks.push({
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+              }
+            ]
+          });
+        }
+      });
+      
+      if (weeklyData.acquisitionAgents.length > 0 || weeklyData.otherUsers.length > 0) {
+        blocks.push({
+          type: 'divider'
+        });
+      }
+    }
+    
+    // Acquisition Agents Section
+    if (weeklyData.acquisitionAgents.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Acquisition Agents* (${weeklyData.acquisitionAgents.length})`
+        }
+      });
+      
+      weeklyData.acquisitionAgents.forEach((agent, index) => {
+        blocks.push({
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*${agent.name}* (Acquisition)`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📊 *Weekly Total:* ${agent.weeklyTotal.totalCalls} dials, ${this.formatTimeInHoursAndMinutes(agent.weeklyTotal.totalDurationMinutes)} talk time`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📈 *Daily Average:* ${agent.dailyAverage.dialsPerDay.toFixed(1)} dials/day, ${this.formatTimeInHoursAndMinutes(agent.dailyAverage.talkTimePerDay)} talk time/day`
+            }
+          ]
+        });
+        
+        if (index < weeklyData.acquisitionAgents.length - 1) {
+          blocks.push({
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+              }
+            ]
+          });
+        }
+      });
+      
+      if (weeklyData.otherUsers.length > 0) {
+        blocks.push({
+          type: 'divider'
+        });
+      }
+    }
+    
+    // Other Users Section (if any)
+    if (weeklyData.otherUsers.length > 0) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `📋 *Other Users* (${weeklyData.otherUsers.length})`
+        }
+      });
+      
+      weeklyData.otherUsers.forEach((agent, index) => {
+        blocks.push({
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*${agent.name}*`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📊 *Weekly Total:* ${agent.weeklyTotal.totalCalls} dials, ${this.formatTimeInHoursAndMinutes(agent.weeklyTotal.totalDurationMinutes)} talk time`
+            },
+            {
+              type: 'mrkdwn',
+              text: `📈 *Daily Average:* ${agent.dailyAverage.dialsPerDay.toFixed(1)} dials/day, ${this.formatTimeInHoursAndMinutes(agent.dailyAverage.talkTimePerDay)} talk time/day`
+            }
+          ]
+        });
+        
+        if (index < weeklyData.otherUsers.length - 1) {
+          blocks.push({
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
+              }
+            ]
+          });
+        }
+      });
+    }
+    
+    // Add footer
+    blocks.push({
+      type: 'divider'
+    });
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: `📊 Report generated on ${new Date().toLocaleString('en-US', {
+            weekday: 'long',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true
+          })}`
+        }
+      ]
+    });
+    
+    return {
+      blocks,
+      text: `Weekly Average Report | ${startTime} - ${endTime} | ${weeklyData.dispoAgents.length} Dispo agents, ${weeklyData.acquisitionAgents.length} Acquisition agents`
+    };
+  }
+  
+  /**
+   * Send weekly average report to Slack
+   */
+  async sendWeeklyAverageReport(weeklyData) {
+    this.logger.info('SlackService: Weekly average data structure:', {
+      period: weeklyData.period,
+      startTime: weeklyData.startTime,
+      endTime: weeklyData.endTime,
+      workingDays: weeklyData.workingDays,
+      summary: weeklyData.summary
+    });
+    
+    const message = this.formatWeeklyAverageMessage(weeklyData);
+    
+    this.logger.info('SlackService: Formatted weekly average message structure:', {
+      blockCount: message.blocks ? message.blocks.length : 0
+    });
+    
+    return await this.sendMessage(message);
+  }
 }
 
 module.exports = SlackService;
