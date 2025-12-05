@@ -4,6 +4,48 @@ const { body, validationResult } = require('express-validator');
 
 module.exports = (logger, generateReport, slackService) => {
   const router = express.Router();
+  
+  /**
+   * Helper function to organize users by agent category
+   */
+  const organizeUsersByCategory = (users) => {
+    const dispoAgents = users.filter(user => user.agentCategory === 'dispo');
+    const acquisitionAgents = users.filter(user => user.agentCategory === 'acquisition');
+    const otherUsers = users.filter(user => !user.agentCategory || user.agentCategory === 'other');
+    
+    return {
+      dispoAgents,
+      acquisitionAgents,
+      otherUsers,
+      totalUsers: users.length,
+      dispoCount: dispoAgents.length,
+      acquisitionCount: acquisitionAgents.length,
+      otherCount: otherUsers.length
+    };
+  };
+  
+  /**
+   * Helper function to format user data for API responses
+   */
+  const formatUserData = (user) => ({
+    name: user.name,
+    user_id: user.user_id,
+    email: user.email,
+    agentCategory: user.agentCategory || 'other',
+    totalCalls: user.totalCalls,
+    answeredCalls: user.answeredCalls,
+    missedCalls: user.missedCalls,
+    totalDurationMinutes: user.totalDurationMinutes,
+    outboundCalls: user.outboundCalls,
+    answeredOutboundCalls: user.answeredOutboundCalls,
+    inboundCalls: user.inboundCalls,
+    answeredInboundCalls: user.answeredInboundCalls,
+    inboundDurationMinutes: user.inboundDurationMinutes,
+    outboundDurationMinutes: user.outboundDurationMinutes,
+    callCount: user.calls ? user.calls.length : 0,
+    availability: user.availability,
+    error: user.error
+  });
 
   /**
    * @swagger
@@ -39,17 +81,30 @@ module.exports = (logger, generateReport, slackService) => {
       logger.info('Afternoon report triggered via API');
       const data = await generateReport('afternoon');
       
-      // Debug: Log the data structure to see if users have unique data
+      // Debug: Log the data structure organized by category
+      const organized = organizeUsersByCategory(data.users || []);
       logger.info('DEBUG: Raw activity data structure:', {
         period: data.period,
-        userCount: data.users ? data.users.length : 0,
-        users: data.users ? data.users.map(u => ({
+        summary: {
+          totalUsers: organized.totalUsers,
+          dispoCount: organized.dispoCount,
+          acquisitionCount: organized.acquisitionCount,
+          otherCount: organized.otherCount
+        },
+        dispoAgents: organized.dispoAgents.map(u => ({
           name: u.name,
           user_id: u.user_id,
           totalCalls: u.totalCalls,
           answeredCalls: u.answeredCalls,
           totalDurationMinutes: u.totalDurationMinutes
-        })) : []
+        })),
+        acquisitionAgents: organized.acquisitionAgents.map(u => ({
+          name: u.name,
+          user_id: u.user_id,
+          totalCalls: u.totalCalls,
+          answeredCalls: u.answeredCalls,
+          totalDurationMinutes: u.totalDurationMinutes
+        }))
       });
       
       const sent = await slackService.sendActivityReport(data);
@@ -100,17 +155,30 @@ module.exports = (logger, generateReport, slackService) => {
       logger.info('Night report triggered via API');
       const data = await generateReport('night');
       
-      // Debug: Log the data structure to see if users have unique data
+      // Debug: Log the data structure organized by category
+      const organized = organizeUsersByCategory(data.users || []);
       logger.info('DEBUG: Raw activity data structure:', {
         period: data.period,
-        userCount: data.users ? data.users.length : 0,
-        users: data.users ? data.users.map(u => ({
+        summary: {
+          totalUsers: organized.totalUsers,
+          dispoCount: organized.dispoCount,
+          acquisitionCount: organized.acquisitionCount,
+          otherCount: organized.otherCount
+        },
+        dispoAgents: organized.dispoAgents.map(u => ({
           name: u.name,
           user_id: u.user_id,
           totalCalls: u.totalCalls,
           answeredCalls: u.answeredCalls,
           totalDurationMinutes: u.totalDurationMinutes
-        })) : []
+        })),
+        acquisitionAgents: organized.acquisitionAgents.map(u => ({
+          name: u.name,
+          user_id: u.user_id,
+          totalCalls: u.totalCalls,
+          answeredCalls: u.answeredCalls,
+          totalDurationMinutes: u.totalDurationMinutes
+        }))
       });
       
       const sent = await slackService.sendActivityReport(data);
@@ -197,29 +265,25 @@ module.exports = (logger, generateReport, slackService) => {
         if (returnRaw === true || returnRaw === 'true') {
           logger.info(`Custom raw report requested: ${name} from ${startTime} to ${endTime}`);
           const data = await generateReport(name, startTime, endTime);
+          const organized = organizeUsersByCategory(data.users || []);
+          
           return res.json({
             success: true,
             data: {
               period: data.period,
               startTime: data.startTime,
               endTime: data.endTime,
-              userCount: data.users ? data.users.length : 0,
-              users: data.users ? data.users.map(u => ({
-                name: u.name,
-                user_id: u.user_id,
-                email: u.email,
-                totalCalls: u.totalCalls,
-                answeredCalls: u.answeredCalls,
-                missedCalls: u.missedCalls,
-                totalDurationMinutes: u.totalDurationMinutes,
-                outboundCalls: u.outboundCalls,
-                answeredOutboundCalls: u.answeredOutboundCalls,
-                inboundCalls: u.inboundCalls,
-                answeredInboundCalls: u.answeredInboundCalls,
-                inboundDurationMinutes: u.inboundDurationMinutes,
-                outboundDurationMinutes: u.outboundDurationMinutes,
-                callCount: u.calls ? u.calls.length : 0
-              })) : []
+              summary: {
+                totalUsers: organized.totalUsers,
+                dispoCount: organized.dispoCount,
+                acquisitionCount: organized.acquisitionCount,
+                otherCount: organized.otherCount
+              },
+              dispoAgents: organized.dispoAgents.map(formatUserData),
+              acquisitionAgents: organized.acquisitionAgents.map(formatUserData),
+              otherUsers: organized.otherUsers.map(formatUserData),
+              // Keep flat users array for backward compatibility
+              users: data.users ? data.users.map(formatUserData) : []
             }
           });
         }
@@ -234,13 +298,19 @@ module.exports = (logger, generateReport, slackService) => {
             logger.info(`Starting custom report generation: ${name} from ${startTime} to ${endTime}`);
             const data = await generateReport(name, startTime, endTime);
             
-            // Debug: Log the data structure to see if users have data
+            // Debug: Log the data structure organized by category
+            const organized = organizeUsersByCategory(data.users || []);
             logger.info('DEBUG: Custom report data structure:', {
               period: data.period,
               startTime: data.startTime,
               endTime: data.endTime,
-              userCount: data.users ? data.users.length : 0,
-              users: data.users ? data.users.map(u => ({
+              summary: {
+                totalUsers: organized.totalUsers,
+                dispoCount: organized.dispoCount,
+                acquisitionCount: organized.acquisitionCount,
+                otherCount: organized.otherCount
+              },
+              dispoAgents: organized.dispoAgents.map(u => ({
                 name: u.name,
                 user_id: u.user_id,
                 totalCalls: u.totalCalls,
@@ -248,7 +318,16 @@ module.exports = (logger, generateReport, slackService) => {
                 totalDurationMinutes: u.totalDurationMinutes,
                 outboundCalls: u.outboundCalls,
                 inboundCalls: u.inboundCalls
-              })) : []
+              })),
+              acquisitionAgents: organized.acquisitionAgents.map(u => ({
+                name: u.name,
+                user_id: u.user_id,
+                totalCalls: u.totalCalls,
+                answeredCalls: u.answeredCalls,
+                totalDurationMinutes: u.totalDurationMinutes,
+                outboundCalls: u.outboundCalls,
+                inboundCalls: u.inboundCalls
+              }))
             });
             
             const sent = await slackService.sendActivityReport(data);
@@ -309,17 +388,29 @@ module.exports = (logger, generateReport, slackService) => {
       // Get raw data from Aircall
       const data = await generateReport('Today', startOfDay.toISOString(), now.toISOString());
       logger.info("Received response from Aircall for today's report");
-      // Removed: const userStats = data.users.map(user => ({
-      // Removed:   userId: user.user_id,
-      // Removed:   name: user.name,
-      // Removed:   totalDials: user.totalCalls,
-      // Removed:   totalTalkTimeMinutes: user.totalDurationMinutes,
-      // Removed:   startDate: startOfDay,
-      // Removed:   endDate: now
-      // Removed: }));
-      // Removed: await UserCallStats.insertMany(userStats);
-      // Removed: logger.info("Today's formatted report data saved to MongoDB");
-      res.json({ success: true });
+      
+      const organized = organizeUsersByCategory(data.users || []);
+      
+      // Return organized data
+      res.json({
+        success: true,
+        data: {
+          period: data.period,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          summary: {
+            totalUsers: organized.totalUsers,
+            dispoCount: organized.dispoCount,
+            acquisitionCount: organized.acquisitionCount,
+            otherCount: organized.otherCount
+          },
+          dispoAgents: organized.dispoAgents.map(formatUserData),
+          acquisitionAgents: organized.acquisitionAgents.map(formatUserData),
+          otherUsers: organized.otherUsers.map(formatUserData),
+          // Keep flat users array for backward compatibility
+          users: data.users ? data.users.map(formatUserData) : []
+        }
+      });
     } catch (error) {
       logger.error("Error running today's report:", error.message);
       res.status(500).json({ success: false, error: error.message });
@@ -331,31 +422,26 @@ module.exports = (logger, generateReport, slackService) => {
     try {
       logger.info('Debug activity data endpoint called');
       const data = await generateReport('afternoon');
+      const organized = organizeUsersByCategory(data.users || []);
       
-      // Return the raw data structure for inspection
+      // Return the raw data structure organized by category
       res.json({
         success: true,
         data: {
           period: data.period,
           startTime: data.startTime,
           endTime: data.endTime,
-          userCount: data.users ? data.users.length : 0,
-          users: data.users ? data.users.map(u => ({
-            name: u.name,
-            user_id: u.user_id,
-            email: u.email,
-            totalCalls: u.totalCalls,
-            answeredCalls: u.answeredCalls,
-            missedCalls: u.missedCalls,
-            totalDurationMinutes: u.totalDurationMinutes,
-            outboundCalls: u.outboundCalls,
-            answeredOutboundCalls: u.answeredOutboundCalls,
-            inboundCalls: u.inboundCalls,
-            answeredInboundCalls: u.answeredInboundCalls,
-            inboundDurationMinutes: u.inboundDurationMinutes,
-            outboundDurationMinutes: u.outboundDurationMinutes,
-            callCount: u.calls ? u.calls.length : 0
-          })) : []
+          summary: {
+            totalUsers: organized.totalUsers,
+            dispoCount: organized.dispoCount,
+            acquisitionCount: organized.acquisitionCount,
+            otherCount: organized.otherCount
+          },
+          dispoAgents: organized.dispoAgents.map(formatUserData),
+          acquisitionAgents: organized.acquisitionAgents.map(formatUserData),
+          otherUsers: organized.otherUsers.map(formatUserData),
+          // Keep flat users array for backward compatibility
+          users: data.users ? data.users.map(formatUserData) : []
         }
       });
     } catch (error) {
