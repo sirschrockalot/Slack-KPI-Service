@@ -1,4 +1,5 @@
 const express = require('express');
+const { sanitizeError } = require('../utils/errorHandler');
 
 module.exports = (logger, slackService, aircallService) => {
   const router = express.Router();
@@ -15,8 +16,8 @@ module.exports = (logger, slackService, aircallService) => {
         }
       });
     } catch (error) {
-      logger.error('Error testing connections:', error.message);
-      res.status(500).json({ success: false, error: error.message });
+      const sanitized = sanitizeError(error, logger);
+      res.status(500).json(sanitized);
     }
   });
 

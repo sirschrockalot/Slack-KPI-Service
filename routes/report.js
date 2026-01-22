@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const { sanitizeError } = require('../utils/errorHandler');
 
 
 module.exports = (logger, generateReport, slackService) => {
@@ -116,8 +117,8 @@ module.exports = (logger, generateReport, slackService) => {
         res.status(500).json({ success: false, error: 'Failed to send afternoon report to Slack' });
       }
     } catch (error) {
-      logger.error('Error running afternoon report:', error.message);
-      res.status(500).json({ success: false, error: error.message });
+      const sanitized = sanitizeError(error, logger);
+      res.status(500).json(sanitized);
     }
   });
 
@@ -190,8 +191,8 @@ module.exports = (logger, generateReport, slackService) => {
         res.status(500).json({ success: false, error: 'Failed to send night report to Slack' });
       }
     } catch (error) {
-      logger.error('Error running night report:', error.message);
-      res.status(500).json({ success: false, error: error.message });
+      const sanitized = sanitizeError(error, logger);
+      res.status(500).json(sanitized);
     }
   });
 
@@ -412,43 +413,12 @@ module.exports = (logger, generateReport, slackService) => {
         }
       });
     } catch (error) {
-      logger.error("Error running today's report:", error.message);
-      res.status(500).json({ success: false, error: error.message });
+      const sanitized = sanitizeError(error, logger);
+      res.status(500).json(sanitized);
     }
   });
 
-  // Debug endpoint to see raw activity data
-  router.get('/debug/activity-data', async (req, res) => {
-    try {
-      logger.info('Debug activity data endpoint called');
-      const data = await generateReport('afternoon');
-      const organized = organizeUsersByCategory(data.users || []);
-      
-      // Return the raw data structure organized by category
-      res.json({
-        success: true,
-        data: {
-          period: data.period,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          summary: {
-            totalUsers: organized.totalUsers,
-            dispoCount: organized.dispoCount,
-            acquisitionCount: organized.acquisitionCount,
-            otherCount: organized.otherCount
-          },
-          dispoAgents: organized.dispoAgents.map(formatUserData),
-          acquisitionAgents: organized.acquisitionAgents.map(formatUserData),
-          otherUsers: organized.otherUsers.map(formatUserData),
-          // Keep flat users array for backward compatibility
-          users: data.users ? data.users.map(formatUserData) : []
-        }
-      });
-    } catch (error) {
-      logger.error('Error getting debug activity data:', error.message);
-      res.status(500).json({ success: false, error: error.message });
-    }
-  });
+  // Debug endpoint removed for security (was accessible without authentication)
 
   // Removed GET /report/custom/raw in favor of returnRaw flag on POST /report/custom
 
@@ -609,8 +579,8 @@ module.exports = (logger, generateReport, slackService) => {
         res.status(500).json({ success: false, error: 'Failed to send weekly average report to Slack' });
       }
     } catch (error) {
-      logger.error('Error running weekly average report:', error.message);
-      res.status(500).json({ success: false, error: error.message });
+      const sanitized = sanitizeError(error, logger);
+      res.status(500).json(sanitized);
     }
   });
 
