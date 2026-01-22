@@ -13,6 +13,7 @@ const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
+const { sanitizeError } = require('./utils/errorHandler');
 class ApiServer {
   constructor() {
     this.app = express();
@@ -90,11 +91,23 @@ class ApiServer {
   validateConfiguration() {
     const requiredFields = ['aircallApiId', 'aircallApiToken', 'slackApiToken', 'slackChannelId'];
     const missingFields = requiredFields.filter(field => !this.config[field]);
-    
+
+    // Validate JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      throw new Error('Missing required environment variable: JWT_SECRET');
+    }
+
+    // Validate JWT_SECRET strength (minimum 32 characters for security)
+    if (process.env.JWT_SECRET.length < 32) {
+      throw new Error('JWT_SECRET must be at least 32 characters long for security');
+    }
+
     if (missingFields.length > 0) {
       const missingVars = missingFields.map(field => field.replace(/([A-Z])/g, '_$1').toUpperCase());
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
+
+    this.logger.info('✓ JWT_SECRET: configured and validated');
   }
   
   /**
@@ -128,7 +141,7 @@ class ApiServer {
     // CORS configuration to allow localhost
     this.app.use(cors({
       origin: function (origin, callback) {
-        console.log('CORS request from origin:', origin);
+        // Removed console.log to prevent log injection
         if (!origin) return callback(null, true); // allow non-browser requests
         if (/^http:\/\/localhost(:\d+)?$/.test(origin)) {
           return callback(null, true);
@@ -138,17 +151,47 @@ class ApiServer {
       credentials: true
     }));
     
-    // Security headers
-    this.app.use(helmet());
+    // Security headers with enhanced configuration
+    this.app.use(helmet({
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          styleSrc: ["'self'", "'unsafe-inline'"], // Required for Swagger UI
+          scriptSrc: ["'self'"],
+          imgSrc: ["'self'", "data:", "https:"],
+          connectSrc: ["'self'"],
+          fontSrc: ["'self'"],
+          objectSrc: ["'none'"],
+          mediaSrc: ["'self'"],
+          frameSrc: ["'none'"],
+        },
+      },
+      hsts: {
+        maxAge: 31536000, // 1 year in seconds
+        includeSubDomains: true,
+        preload: true
+      },
+      frameguard: {
+        action: 'deny' // Prevent clickjacking
+      },
+      noSniff: true, // Prevent MIME type sniffing
+      xssFilter: true, // Enable XSS filter
+      referrerPolicy: {
+        policy: 'strict-origin-when-cross-origin'
+      }
+    }));
     
-    // Rate limiting middleware (100 requests per 15 minutes per IP)
-    const limiter = rateLimit({
+    // General rate limiter for all endpoints
+    const generalLimiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // limit each IP to 100 requests per windowMs
-      standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-      legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+      max: 100,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { success: false, error: 'Too many requests, please try again later' }
     });
-    this.app.use(limiter);
+
+    // Apply general limiter globally
+    this.app.use(generalLimiter);
     
     this.app.use(express.json());
     
@@ -165,10 +208,9 @@ class ApiServer {
       next();
     });
     
-    // JWT authentication middleware (skip /health, /status, debug endpoints, and scheduler endpoints)
+    // JWT authentication middleware (skip /health, /status endpoints only)
     this.app.use((req, res, next) => {
-      if (['/health', '/status'].includes(req.path) || 
-          req.path.startsWith('/debug/')) {
+      if (['/health', '/status'].includes(req.path)) {
         return next();
       }
       const authHeader = req.headers['authorization'];
@@ -187,11 +229,8 @@ class ApiServer {
     
     // Error handling middleware
     this.app.use((err, req, res, next) => {
-      this.logger.error('Unhandled error:', err.message);
-      res.status(500).json({
-        success: false,
-        error: 'Internal server error'
-      });
+      const sanitized = sanitizeError(err, this.logger);
+      res.status(500).json(sanitized);
     });
   }
   
@@ -204,7 +243,7 @@ class ApiServer {
       customCss: '.swagger-ui .topbar { display: none }',
       customSiteTitle: 'Aircall Slack Agent API Documentation'
     }));
-    
+
     // Metrics endpoint
     this.app.get('/metrics', async (req, res) => {
       try {
@@ -214,9 +253,20 @@ class ApiServer {
         res.status(500).end(err);
       }
     });
-    
+
+    // Stricter rate limiter for report generation (expensive operations)
+    const reportLimiter = rateLimit({
+      windowMs: 5 * 60 * 1000, // 5 minutes
+      max: 20, // Reports are expensive
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: false,
+      message: { success: false, error: 'Report generation rate limit exceeded. Please wait before requesting another report.' }
+    });
+
     // API routes
     this.app.use(healthRouter(this.logger, this.config));
+    this.app.use('/report', reportLimiter); // Apply stricter limit to report endpoints
     this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
     // Removed: this.app.use(schedulerRouter(this.logger, this.reportScheduler, this.generateReport.bind(this), this.slackService));
