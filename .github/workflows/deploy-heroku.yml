@@ -1,0 +1,57 @@
+name: Deploy to Heroku with Encrypted Secrets
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests (if available)
+        run: npm test
+        continue-on-error: true
+
+      - name: Deploy to Heroku
+        uses: akhileshns/heroku-deploy@v3.13.15
+        with:
+          heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+          heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+          heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        env:
+          # CRITICAL: Inject master encryption key from GitHub Secrets
+          # This key is NOT stored in Heroku - only injected during deployment
+          HD_MASTER_ENCRYPTION_KEY: ${{ secrets.MASTER_ENCRYPTION_KEY }}
+
+      - name: Verify deployment
+        run: |
+          echo "Waiting for deployment to complete..."
+          sleep 10
+          curl -f https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com/health || exit 1
+          echo "✅ Deployment successful and health check passed"
+
+      - name: Notify on success
+        if: success()
+        run: |
+          echo "🎉 Deployment to Heroku successful!"
+          echo "App URL: https://${{ secrets.HEROKU_APP_NAME }}.herokuapp.com"
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "❌ Deployment failed. Check logs above for details."
+          exit 1

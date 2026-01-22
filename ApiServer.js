@@ -14,6 +14,7 @@ const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
 const testConnectionsRouter = require('./routes/testConnections');
 const { sanitizeError } = require('./utils/errorHandler');
+const { decrypt } = require('./utils/encryption');
 class ApiServer {
   constructor() {
     this.app = express();
@@ -50,30 +51,32 @@ class ApiServer {
    * Initialize configuration from environment variables
    */
   initializeConfiguration() {
-    // Load configuration from GitHub secrets (via environment variables)
-    this.config = {
-      aircallApiId: process.env.AIRCALL_API_ID || process.env.INPUT_AIRCALL_API_ID,
-      aircallApiToken: process.env.AIRCALL_API_TOKEN || process.env.INPUT_AIRCALL_API_TOKEN,
-      slackApiToken: process.env.SLACK_API_TOKEN || process.env.INPUT_SLACK_API_TOKEN,
-      slackChannelId: process.env.SLACK_CHANNEL_ID || process.env.INPUT_SLACK_CHANNEL_ID,
-      port: process.env.PORT || 6000
-    };
+    // Check if encryption is enabled
+    const useEncryption = process.env.USE_ENCRYPTION === 'true';
+
+    if (useEncryption) {
+      this.logger.info('🔐 Encryption enabled - decrypting API keys from Heroku Config Vars');
+      this.config = this.loadEncryptedConfiguration();
+    } else {
+      this.logger.info('⚠️  Encryption disabled - using plaintext API keys (not recommended for production)');
+      this.config = this.loadPlaintextConfiguration();
+    }
     
     // Parse excluded users
     const excludedUsersEnv = process.env.EXCLUDED_USERS || process.env.INPUT_EXCLUDED_USERS || 'Joel Schrock';
     this.config.excludedUsers = excludedUsersEnv.split(',').map(name => name.trim()).filter(name => name);
-    
+
     // Parse Dispo agents
     const dispoAgentsEnv = process.env.DISPO_AGENTS || process.env.INPUT_DISPO_AGENTS || '';
     this.config.dispoAgents = dispoAgentsEnv.split(',').map(name => name.trim()).filter(name => name);
-    
+
     // Parse Acquisition agents
     const acquisitionAgentsEnv = process.env.ACQUISITION_AGENTS || process.env.INPUT_ACQUISITION_AGENTS || '';
     this.config.acquisitionAgents = acquisitionAgentsEnv.split(',').map(name => name.trim()).filter(name => name);
-    
+
     // Validate required environment variables
     this.validateConfiguration();
-    
+
     // Log configuration status (without revealing sensitive values)
     this.logger.info('Configuration loaded from environment variables:');
     this.logger.info('✓ AIRCALL_API_ID:', this.config.aircallApiId ? 'configured' : 'missing');
@@ -83,6 +86,66 @@ class ApiServer {
     this.logger.info('✓ EXCLUDED_USERS:', this.config.excludedUsers.join(', '));
     this.logger.info('✓ DISPO_AGENTS:', this.config.dispoAgents.length > 0 ? `${this.config.dispoAgents.length} configured` : 'none');
     this.logger.info('✓ ACQUISITION_AGENTS:', this.config.acquisitionAgents.length > 0 ? `${this.config.acquisitionAgents.length} configured` : 'none');
+  }
+
+  /**
+   * Load configuration using encrypted values from Heroku Config Vars
+   * Decrypts using master key from GitHub Secrets (injected during deployment)
+   */
+  loadEncryptedConfiguration() {
+    const masterKey = process.env.MASTER_ENCRYPTION_KEY;
+
+    if (!masterKey) {
+      throw new Error('MASTER_ENCRYPTION_KEY is required when USE_ENCRYPTION=true. ' +
+                      'This should be injected during deployment via GitHub Actions.');
+    }
+
+    if (masterKey.length < 32) {
+      throw new Error('MASTER_ENCRYPTION_KEY must be at least 32 characters long');
+    }
+
+    try {
+      return {
+        aircallApiId: this.decryptConfig('AIRCALL_API_ID_ENCRYPTED', masterKey),
+        aircallApiToken: this.decryptConfig('AIRCALL_API_TOKEN_ENCRYPTED', masterKey),
+        slackApiToken: this.decryptConfig('SLACK_API_TOKEN_ENCRYPTED', masterKey),
+        slackChannelId: this.decryptConfig('SLACK_CHANNEL_ID_ENCRYPTED', masterKey),
+        port: process.env.PORT || 6000
+      };
+    } catch (error) {
+      this.logger.error('Failed to decrypt configuration:', error.message);
+      throw new Error('Configuration decryption failed. Check that encrypted values are valid and master key is correct.');
+    }
+  }
+
+  /**
+   * Load configuration using plaintext values (legacy/development mode)
+   */
+  loadPlaintextConfiguration() {
+    return {
+      aircallApiId: process.env.AIRCALL_API_ID || process.env.INPUT_AIRCALL_API_ID,
+      aircallApiToken: process.env.AIRCALL_API_TOKEN || process.env.INPUT_AIRCALL_API_TOKEN,
+      slackApiToken: process.env.SLACK_API_TOKEN || process.env.INPUT_SLACK_API_TOKEN,
+      slackChannelId: process.env.SLACK_CHANNEL_ID || process.env.INPUT_SLACK_CHANNEL_ID,
+      port: process.env.PORT || 6000
+    };
+  }
+
+  /**
+   * Decrypt a single config value
+   */
+  decryptConfig(envVarName, masterKey) {
+    const encryptedValue = process.env[envVarName];
+
+    if (!encryptedValue) {
+      throw new Error(`${envVarName} is not set in environment variables`);
+    }
+
+    try {
+      return decrypt(encryptedValue, masterKey);
+    } catch (error) {
+      throw new Error(`Failed to decrypt ${envVarName}: ${error.message}`);
+    }
   }
   
   /**
