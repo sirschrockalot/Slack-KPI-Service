@@ -155,14 +155,29 @@ class ApiServer {
     const requiredFields = ['aircallApiId', 'aircallApiToken', 'slackApiToken', 'slackChannelId'];
     const missingFields = requiredFields.filter(field => !this.config[field]);
 
-    // Validate JWT_SECRET exists
-    if (!process.env.JWT_SECRET) {
-      throw new Error('Missing required environment variable: JWT_SECRET');
+    // Validate JWT_SECRET exists (check both versioned and non-versioned)
+    const hasJwtSecret = process.env.JWT_SECRET || process.env.JWT_SECRET_V1 || process.env.JWT_SECRET_V2;
+    if (!hasJwtSecret) {
+      throw new Error('Missing required environment variable: JWT_SECRET (or JWT_SECRET_V1/JWT_SECRET_V2 for versioning)');
+    }
+
+    // Collect all JWT secrets for validation
+    const jwtSecrets = {};
+    if (process.env.JWT_SECRET) {
+      jwtSecrets.primary = process.env.JWT_SECRET;
+    }
+    if (process.env.JWT_SECRET_V1) {
+      jwtSecrets.v1 = process.env.JWT_SECRET_V1;
+    }
+    if (process.env.JWT_SECRET_V2) {
+      jwtSecrets.v2 = process.env.JWT_SECRET_V2;
     }
 
     // Validate JWT_SECRET strength (minimum 32 characters for security)
-    if (process.env.JWT_SECRET.length < 32) {
-      throw new Error('JWT_SECRET must be at least 32 characters long for security');
+    for (const [version, secret] of Object.entries(jwtSecrets)) {
+      if (secret.length < 32) {
+        throw new Error(`JWT_SECRET${version !== 'primary' ? '_' + version.toUpperCase() : ''} must be at least 32 characters long for security`);
+      }
     }
 
     if (missingFields.length > 0) {
@@ -170,7 +185,21 @@ class ApiServer {
       throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
     }
 
-    this.logger.info('✓ JWT_SECRET: configured and validated');
+    // Log JWT configuration status
+    const activeVersion = process.env.JWT_ACTIVE_VERSION || 'primary';
+    if (Object.keys(jwtSecrets).length > 1) {
+      this.logger.info(`✓ JWT Versioning: ${Object.keys(jwtSecrets).length} secrets configured (active: ${activeVersion})`);
+      Object.keys(jwtSecrets).forEach(version => {
+        const deprecatedDate = process.env[`JWT_DEPRECATED_DATE_${version.toUpperCase()}`];
+        if (deprecatedDate) {
+          this.logger.info(`  - ${version}: configured (deprecated: ${deprecatedDate})`);
+        } else {
+          this.logger.info(`  - ${version}: configured`);
+        }
+      });
+    } else {
+      this.logger.info('✓ JWT_SECRET: configured and validated');
+    }
   }
   
   /**
@@ -201,12 +230,32 @@ class ApiServer {
    * Setup Express middleware
    */
   setupMiddleware() {
-    // CORS configuration to allow localhost
+    // CORS configuration with environment-based allowed origins
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+      : ['http://localhost', 'http://localhost:3000', 'http://localhost:6000'];
+
+    this.logger.info('✓ CORS allowed origins:', allowedOrigins.join(', '));
+
     this.app.use(cors({
       origin: function (origin, callback) {
-        // Removed console.log to prevent log injection
-        if (!origin) return callback(null, true); // allow non-browser requests
-        if (/^http:\/\/localhost(:\d+)?$/.test(origin)) {
+        // Allow non-browser requests (curl, Postman, etc.)
+        if (!origin) return callback(null, true);
+
+        // Check if origin matches any allowed origins (exact match or with port)
+        const isAllowed = allowedOrigins.some(allowedOrigin => {
+          if (origin === allowedOrigin) return true;
+          // Allow localhost with any port
+          if (allowedOrigin === 'http://localhost' && /^http:\/\/localhost(:\d+)?$/.test(origin)) {
+            return true;
+          }
+          if (allowedOrigin === 'https://localhost' && /^https:\/\/localhost(:\d+)?$/.test(origin)) {
+            return true;
+          }
+          return false;
+        });
+
+        if (isAllowed) {
           return callback(null, true);
         }
         return callback(new Error('Not allowed by CORS'));
@@ -271,23 +320,74 @@ class ApiServer {
       next();
     });
     
-    // JWT authentication middleware (skip /health, /status endpoints only)
+    // JWT authentication middleware with multi-version support (skip only public endpoints: /health, /status, /api-docs)
     this.app.use((req, res, next) => {
-      if (['/health', '/status'].includes(req.path)) {
+      // Public endpoints that don't require authentication
+      const publicEndpoints = ['/health', '/status', '/api-docs'];
+      const isPublicEndpoint = publicEndpoints.some(endpoint =>
+        req.path === endpoint || req.path.startsWith(endpoint + '/')
+      );
+
+      if (isPublicEndpoint) {
         return next();
       }
+
+      // All other endpoints (including /metrics) require JWT authentication
       const authHeader = req.headers['authorization'];
       const token = authHeader && authHeader.split(' ')[1];
       if (!token) {
         return res.status(401).json({ success: false, error: 'Missing token' });
       }
-      jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) {
-          return res.status(403).json({ success: false, error: 'Invalid token' });
+
+      // Build list of JWT secrets to try (supports versioning for zero-downtime rotation)
+      const secrets = {};
+      if (process.env.JWT_SECRET_V2) secrets.v2 = process.env.JWT_SECRET_V2;
+      if (process.env.JWT_SECRET_V1) secrets.v1 = process.env.JWT_SECRET_V1;
+      if (process.env.JWT_SECRET) secrets.primary = process.env.JWT_SECRET;
+
+      // Try to verify with each active secret
+      let verified = false;
+      let user = null;
+      let tokenVersion = null;
+
+      for (const [version, secret] of Object.entries(secrets)) {
+        // Check if this version is deprecated
+        const deprecatedDate = process.env[`JWT_DEPRECATED_DATE_${version.toUpperCase()}`];
+        if (deprecatedDate && new Date(deprecatedDate) < new Date()) {
+          this.logger.debug(`Skipping deprecated JWT version ${version} (deprecated: ${deprecatedDate})`);
+          continue; // Skip deprecated versions
         }
-        req.user = user;
-        next();
-      });
+
+        try {
+          user = jwt.verify(token, secret);
+          verified = true;
+          tokenVersion = version;
+          break;
+        } catch (err) {
+          // Try next secret
+          continue;
+        }
+      }
+
+      if (!verified) {
+        return res.status(403).json({ success: false, error: 'Invalid token' });
+      }
+
+      // Warn if using old version
+      const activeVersion = process.env.JWT_ACTIVE_VERSION || 'primary';
+      if (tokenVersion !== activeVersion && tokenVersion !== 'primary') {
+        res.set('X-Token-Version', tokenVersion);
+        res.set('X-Token-Deprecated', 'true');
+        const deprecationDate = process.env[`JWT_DEPRECATED_DATE_${tokenVersion.toUpperCase()}`];
+        if (deprecationDate) {
+          res.set('X-Token-Migration-Deadline', deprecationDate);
+        }
+        this.logger.warn(`Client using deprecated token version ${tokenVersion} from ${req.ip} on ${req.path}`);
+      }
+
+      req.user = user;
+      req.tokenVersion = tokenVersion;
+      next();
     });
     
     // Error handling middleware
@@ -409,15 +509,17 @@ class ApiServer {
         this.logger.info('Service running in ON-DEMAND mode');
         this.logger.info(`Excluded users: ${this.config.excludedUsers.join(', ')}`);
         this.logger.info('Available endpoints:');
-        this.logger.info('  GET /health - Health check');
-        this.logger.info('  GET /status - Service status');
-        this.logger.info('  GET /test-connections - Test service connections');
-        this.logger.info('  POST /report/afternoon - Trigger afternoon report');
-        this.logger.info('  POST /report/night - Trigger night report');
-        this.logger.info('  POST /report/custom - Trigger custom time range report');
-        this.logger.info('  GET /api-docs - API documentation');
-        this.logger.info('  GET /metrics - Prometheus metrics');
-        
+        this.logger.info('  Public endpoints (no auth required):');
+        this.logger.info('    GET /health - Health check');
+        this.logger.info('    GET /status - Service status');
+        this.logger.info('    GET /api-docs - API documentation');
+        this.logger.info('  Protected endpoints (JWT required):');
+        this.logger.info('    GET /test-connections - Test service connections');
+        this.logger.info('    POST /report/afternoon - Trigger afternoon report');
+        this.logger.info('    POST /report/night - Trigger night report');
+        this.logger.info('    POST /report/custom - Trigger custom time range report');
+        this.logger.info('    GET /metrics - Prometheus metrics (requires JWT)');
+
       });
       
       return this.server;

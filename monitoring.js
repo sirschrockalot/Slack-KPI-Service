@@ -48,8 +48,10 @@ register.registerMetric(aircallApiCalls);
 register.registerMetric(schedulerRuns);
 
 // Prometheus middleware configuration
+// NOTE: metricsPath set to '/internal-prometheus-metrics' to avoid conflicts
+// We use a custom /metrics endpoint in ApiServer.js that is protected by JWT
 const prometheusMiddlewareConfig = prometheusMiddleware({
-  metricsPath: '/metrics',
+  metricsPath: '/internal-prometheus-metrics', // Internal path, not exposed publicly
   collectDefaultMetrics: true, // Let the middleware handle default metrics
   requestDurationBuckets: [0.1, 0.5, 1, 2, 5],
   requestLengthBuckets: [512, 1024, 5120, 10240, 51200],
