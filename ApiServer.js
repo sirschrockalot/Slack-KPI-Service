@@ -105,11 +105,22 @@ class ApiServer {
     }
 
     try {
+      // SLACK_CHANNEL_ID_ENCRYPTED is optional - fall back to plaintext if not encrypted
+      let slackChannelId;
+      if (process.env.SLACK_CHANNEL_ID_ENCRYPTED) {
+        slackChannelId = this.decryptConfig('SLACK_CHANNEL_ID_ENCRYPTED', masterKey);
+      } else {
+        slackChannelId = process.env.SLACK_CHANNEL_ID || process.env.INPUT_SLACK_CHANNEL_ID;
+        if (slackChannelId) {
+          this.logger.info('Using plaintext SLACK_CHANNEL_ID (SLACK_CHANNEL_ID_ENCRYPTED not set)');
+        }
+      }
+
       return {
         aircallApiId: this.decryptConfig('AIRCALL_API_ID_ENCRYPTED', masterKey),
         aircallApiToken: this.decryptConfig('AIRCALL_API_TOKEN_ENCRYPTED', masterKey),
         slackApiToken: this.decryptConfig('SLACK_API_TOKEN_ENCRYPTED', masterKey),
-        slackChannelId: this.decryptConfig('SLACK_CHANNEL_ID_ENCRYPTED', masterKey),
+        slackChannelId: slackChannelId,
         port: process.env.PORT || 6000
       };
     } catch (error) {

@@ -1,5 +1,7 @@
 // Load environment variables from .env file
-require('dotenv').config();
+// Try .env.local first (for local testing), then fall back to .env
+require('dotenv').config({ path: '.env.local' });
+require('dotenv').config(); // This will override with .env if it exists
 
 const ApiServer = require('./ApiServer');
 const winston = require('winston');
