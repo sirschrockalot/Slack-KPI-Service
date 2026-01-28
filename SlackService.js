@@ -204,9 +204,9 @@ class SlackService {
     // KPI thresholds
     const dispoKpiDials = 60;
     const dispoKpiTalkTimeMinutes = 60;
-    // Acquisition agents: 50 dials/day AND 3 hours (180 minutes) talk time/day
+    // Acquisition agents: 50 dials/day AND 3.5 hours (210 minutes) talk time/day
     const acquisitionKpiDials = 50;
-    const acquisitionKpiTalkTimeMinutes = 180; // 3 hours
+    const acquisitionKpiTalkTimeMinutes = 210; // 3.5 hours
     
     // Helper function to check if Dispo agent meets KPIs (BOTH must be met)
     const dispoMeetsKPIs = (user) => {
