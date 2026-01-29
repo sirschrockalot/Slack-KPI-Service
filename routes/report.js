@@ -109,12 +109,13 @@ module.exports = (logger, generateReport, slackService) => {
       });
       
       const sent = await slackService.sendActivityReport(data);
-      if (sent) {
+      if (sent && sent.ok) {
         logger.info('Afternoon report sent to Slack successfully');
         res.json({ success: true, message: 'Afternoon report sent to Slack successfully' });
       } else {
-        logger.error('Failed to send afternoon report to Slack');
-        res.status(500).json({ success: false, error: 'Failed to send afternoon report to Slack' });
+        const errMsg = sent && sent.error ? sent.error : 'Failed to send afternoon report to Slack';
+        logger.error('Failed to send afternoon report to Slack:', errMsg);
+        res.status(500).json({ success: false, error: errMsg });
       }
     } catch (error) {
       const sanitized = sanitizeError(error, logger);
@@ -183,12 +184,13 @@ module.exports = (logger, generateReport, slackService) => {
       });
       
       const sent = await slackService.sendActivityReport(data);
-      if (sent) {
+      if (sent && sent.ok) {
         logger.info('Night report sent to Slack successfully');
         res.json({ success: true, message: 'Night report sent to Slack successfully' });
       } else {
-        logger.error('Failed to send night report to Slack');
-        res.status(500).json({ success: false, error: 'Failed to send night report to Slack' });
+        const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
+        logger.error('Failed to send night report to Slack:', errMsg);
+        res.status(500).json({ success: false, error: errMsg });
       }
     } catch (error) {
       const sanitized = sanitizeError(error, logger);
@@ -332,10 +334,11 @@ module.exports = (logger, generateReport, slackService) => {
             });
             
             const sent = await slackService.sendActivityReport(data);
-            if (sent) {
+            if (sent && sent.ok) {
               logger.info('Custom report sent to Slack successfully');
             } else {
-              logger.error('Failed to send custom report to Slack');
+              const errMsg = sent && sent.error ? sent.error : 'Failed to send custom report to Slack';
+              logger.error('Failed to send custom report to Slack:', errMsg);
             }
           } catch (error) {
             logger.error('Error running custom report:', error.message);
@@ -561,7 +564,7 @@ module.exports = (logger, generateReport, slackService) => {
       // Send to Slack
       const sent = await slackService.sendWeeklyAverageReport(weeklyData);
       
-      if (sent) {
+      if (sent && sent.ok) {
         logger.info('Weekly average report sent to Slack successfully');
         res.json({ 
           success: true, 
@@ -575,8 +578,9 @@ module.exports = (logger, generateReport, slackService) => {
           }
         });
       } else {
-        logger.error('Failed to send weekly average report to Slack');
-        res.status(500).json({ success: false, error: 'Failed to send weekly average report to Slack' });
+        const errMsg = sent && sent.error ? sent.error : 'Failed to send weekly average report to Slack';
+        logger.error('Failed to send weekly average report to Slack:', errMsg);
+        res.status(500).json({ success: false, error: errMsg });
       }
     } catch (error) {
       const sanitized = sanitizeError(error, logger);

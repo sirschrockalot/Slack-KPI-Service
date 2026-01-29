@@ -174,15 +174,16 @@ module.exports = function(logger, reportScheduler, generateReport, slackService)
       
       // Send to Slack
       const sent = await slackService.sendActivityReport(data);
-      if (sent) {
+      if (sent && sent.ok) {
         logger.info('Afternoon report sent to Slack successfully');
         res.json({
           success: true,
           message: 'Afternoon report sent to Slack successfully'
         });
       } else {
-        logger.error('Failed to send afternoon report to Slack');
-        res.status(500).json({ success: false, error: 'Failed to send afternoon report to Slack' });
+        const errMsg = sent && sent.error ? sent.error : 'Failed to send afternoon report to Slack';
+        logger.error('Failed to send afternoon report to Slack:', errMsg);
+        res.status(500).json({ success: false, error: errMsg });
       }
     } catch (error) {
       logger.error('Error triggering afternoon report:', error.message);
@@ -228,15 +229,16 @@ module.exports = function(logger, reportScheduler, generateReport, slackService)
       
       // Send to Slack
       const sent = await slackService.sendActivityReport(data);
-      if (sent) {
+      if (sent && sent.ok) {
         logger.info('Night report sent to Slack successfully');
         res.json({
           success: true,
           message: 'Night report sent to Slack successfully'
         });
       } else {
-        logger.error('Failed to send night report to Slack');
-        res.status(500).json({ success: false, error: 'Failed to send night report to Slack' });
+        const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
+        logger.error('Failed to send night report to Slack:', errMsg);
+        res.status(500).json({ success: false, error: errMsg });
       }
     } catch (error) {
       logger.error('Error triggering night report:', error.message);

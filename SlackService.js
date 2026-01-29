@@ -525,6 +525,7 @@ class SlackService {
   
   /**
    * Send message to Slack channel
+   * @returns {{ ok: true } | { ok: false, error: string }}
    */
   async sendMessage(message) {
     try {
@@ -538,17 +539,22 @@ class SlackService {
       
       if (response.data.ok) {
         this.logger.info('Successfully sent message to Slack');
-        return true;
-      } else {
-        this.logger.error('Slack API error:', response.data.error);
-        return false;
+        return { ok: true };
       }
+      const slackError = response.data.error || JSON.stringify(response.data);
+      const errorMsg = `Slack API error: ${slackError}`;
+      this.logger.error(errorMsg);
+      return { ok: false, error: errorMsg };
     } catch (error) {
-      this.logger.error('Error sending to Slack:', error.message);
-      if (error.response) {
-        this.logger.error('Slack API response:', error.response.data);
+      const detail = error.response?.data
+        ? (error.response.data.error || JSON.stringify(error.response.data))
+        : error.message;
+      const errorMsg = `Slack request failed: ${detail}`;
+      this.logger.error(errorMsg);
+      if (error.response?.status) {
+        this.logger.error(`Slack HTTP status: ${error.response.status}`);
       }
-      return false;
+      return { ok: false, error: errorMsg };
     }
   }
   
@@ -578,7 +584,8 @@ class SlackService {
       userBlocks: message.blocks ? message.blocks.filter(b => b.type === 'section' && b.fields).length : 0
     });
     
-    return await this.sendMessage(message);
+    const result = await this.sendMessage(message);
+    return result;
   }
   
   /**
