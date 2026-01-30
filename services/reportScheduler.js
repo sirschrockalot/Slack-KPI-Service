@@ -115,14 +115,14 @@ class ReportScheduler {
       } else {
         // Use scheduler trigger endpoint
         const response = await axios.post(`${this.baseUrl}/scheduler/trigger/night`, {}, {
-          timeout: 30000, // 30 second timeout
+          timeout: 10000, // 10s enough for 202 response; report runs in background
           headers: {
             'Content-Type': 'application/json'
           }
         });
-        
-        if (response.data.success) {
-          this.logger.info('✅ Night report completed successfully');
+        const accepted = response.status === 202;
+        if (response.data.success || accepted) {
+          this.logger.info(accepted ? '✅ Night report started (running in background)' : '✅ Night report completed successfully');
         } else {
           this.logger.error('❌ Night report failed:', response.data.error);
         }

@@ -128,13 +128,13 @@ module.exports = (logger, generateReport, slackService) => {
    * /report/night:
    *   post:
    *     summary: Generate and send night report
-   *     description: Triggers the generation and sending of a night activity report to Slack
+   *     description: Starts night report generation (Aircall fetch + Slack send). Returns 202 immediately; report runs in background to avoid Heroku 30s timeout.
    *     tags: [Reports]
    *     security:
    *       - bearerAuth: []
    *     responses:
-   *       200:
-   *         description: Report sent successfully
+   *       202:
+   *         description: Report started; running in background
    *         content:
    *           application/json:
    *             schema:
@@ -155,43 +155,34 @@ module.exports = (logger, generateReport, slackService) => {
   router.post('/report/night', async (req, res) => {
     try {
       logger.info('Night report triggered via API');
-      const data = await generateReport('night');
-      
-      // Debug: Log the data structure organized by category
-      const organized = organizeUsersByCategory(data.users || []);
-      logger.info('DEBUG: Raw activity data structure:', {
-        period: data.period,
-        summary: {
-          totalUsers: organized.totalUsers,
-          dispoCount: organized.dispoCount,
-          acquisitionCount: organized.acquisitionCount,
-          otherCount: organized.otherCount
-        },
-        dispoAgents: organized.dispoAgents.map(u => ({
-          name: u.name,
-          user_id: u.user_id,
-          totalCalls: u.totalCalls,
-          answeredCalls: u.answeredCalls,
-          totalDurationMinutes: u.totalDurationMinutes
-        })),
-        acquisitionAgents: organized.acquisitionAgents.map(u => ({
-          name: u.name,
-          user_id: u.user_id,
-          totalCalls: u.totalCalls,
-          answeredCalls: u.answeredCalls,
-          totalDurationMinutes: u.totalDurationMinutes
-        }))
+      // Return 202 immediately to avoid Heroku H12 timeout (30s). Report runs in background.
+      res.status(202).json({
+        success: true,
+        message: 'Night report started; will complete in background (Aircall fetch + Slack send may take 30+ seconds).'
       });
-      
-      const sent = await slackService.sendActivityReport(data);
-      if (sent && sent.ok) {
-        logger.info('Night report sent to Slack successfully');
-        res.json({ success: true, message: 'Night report sent to Slack successfully' });
-      } else {
-        const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
-        logger.error('Failed to send night report to Slack:', errMsg);
-        res.status(500).json({ success: false, error: errMsg });
-      }
+
+      // Run report in background (do not await)
+      (async () => {
+        try {
+          const data = await generateReport('night');
+          const organized = organizeUsersByCategory(data.users || []);
+          logger.info('Night report data ready', {
+            period: data.period,
+            totalUsers: organized.totalUsers,
+            dispoCount: organized.dispoCount,
+            acquisitionCount: organized.acquisitionCount
+          });
+          const sent = await slackService.sendActivityReport(data);
+          if (sent && sent.ok) {
+            logger.info('Night report sent to Slack successfully');
+          } else {
+            const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
+            logger.error('Failed to send night report to Slack:', errMsg);
+          }
+        } catch (err) {
+          logger.error('Night report background error:', err.message, err.stack);
+        }
+      })();
     } catch (error) {
       const sanitized = sanitizeError(error, logger);
       res.status(500).json(sanitized);

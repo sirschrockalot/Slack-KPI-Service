@@ -196,13 +196,13 @@ module.exports = function(logger, reportScheduler, generateReport, slackService)
    * /scheduler/trigger/night:
    *   post:
    *     summary: Manually trigger night report
-   *     description: Manually triggers the night report generation and sending
+   *     description: Starts night report in background; returns 202 immediately to avoid Heroku 30s timeout.
    *     tags: [Scheduler]
    *     security:
    *       - bearerAuth: []
    *     responses:
-   *       200:
-   *         description: Night report triggered successfully
+   *       202:
+   *         description: Night report started; running in background
    *         content:
    *           application/json:
    *             schema:
@@ -223,23 +223,27 @@ module.exports = function(logger, reportScheduler, generateReport, slackService)
   router.post('/scheduler/trigger/night', async (req, res) => {
     try {
       logger.info('Manual night report trigger requested');
-      
-      // Generate report data
-      const data = await generateReport('night');
-      
-      // Send to Slack
-      const sent = await slackService.sendActivityReport(data);
-      if (sent && sent.ok) {
-        logger.info('Night report sent to Slack successfully');
-        res.json({
-          success: true,
-          message: 'Night report sent to Slack successfully'
-        });
-      } else {
-        const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
-        logger.error('Failed to send night report to Slack:', errMsg);
-        res.status(500).json({ success: false, error: errMsg });
-      }
+      // Return 202 immediately to avoid Heroku H12 timeout (30s). Report runs in background.
+      res.status(202).json({
+        success: true,
+        message: 'Night report started; will complete in background.'
+      });
+
+      // Run report in background
+      (async () => {
+        try {
+          const data = await generateReport('night');
+          const sent = await slackService.sendActivityReport(data);
+          if (sent && sent.ok) {
+            logger.info('Night report sent to Slack successfully');
+          } else {
+            const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
+            logger.error('Failed to send night report to Slack:', errMsg);
+          }
+        } catch (err) {
+          logger.error('Error running night report:', err.message, err.stack);
+        }
+      })();
     } catch (error) {
       logger.error('Error triggering night report:', error.message);
       res.status(500).json({ success: false, error: error.message });
