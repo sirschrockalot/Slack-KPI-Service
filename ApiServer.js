@@ -116,10 +116,20 @@ class ApiServer {
         }
       }
 
+      // SLACK_API_TOKEN: plaintext wins if set (so heroku config:set SLACK_API_TOKEN works); else use encrypted
+      const plainSlackToken = process.env.SLACK_API_TOKEN || process.env.INPUT_SLACK_API_TOKEN;
+      let slackApiToken;
+      if (plainSlackToken) {
+        slackApiToken = plainSlackToken;
+        this.logger.info('Using plaintext SLACK_API_TOKEN');
+      } else if (process.env.SLACK_API_TOKEN_ENCRYPTED) {
+        slackApiToken = this.decryptConfig('SLACK_API_TOKEN_ENCRYPTED', masterKey);
+      }
+
       return {
         aircallApiId: this.decryptConfig('AIRCALL_API_ID_ENCRYPTED', masterKey),
         aircallApiToken: this.decryptConfig('AIRCALL_API_TOKEN_ENCRYPTED', masterKey),
-        slackApiToken: this.decryptConfig('SLACK_API_TOKEN_ENCRYPTED', masterKey),
+        slackApiToken: slackApiToken,
         slackChannelId: slackChannelId,
         port: process.env.PORT || 6000
       };
@@ -332,6 +342,7 @@ class ApiServer {
     });
     
     // JWT authentication middleware with multi-version support (skip only public endpoints: /health, /status, /api-docs)
+    // Optional: SCHEDULER_SECRET allows Heroku Scheduler (or other job) to call /report/* without a JWT
     this.app.use((req, res, next) => {
       // Public endpoints that don't require authentication
       const publicEndpoints = ['/health', '/status', '/api-docs'];
@@ -343,9 +354,18 @@ class ApiServer {
         return next();
       }
 
-      // All other endpoints (including /metrics) require JWT authentication
       const authHeader = req.headers['authorization'];
       const token = authHeader && authHeader.split(' ')[1];
+
+      // Scheduler secret: allow /report/* to be called with Bearer SCHEDULER_SECRET (for Heroku Scheduler / external cron)
+      const schedulerSecret = process.env.SCHEDULER_SECRET;
+      const isReportPath = req.path === '/report' || req.path.startsWith('/report/');
+      if (schedulerSecret && isReportPath && token === schedulerSecret) {
+        req.user = { source: 'scheduler' };
+        return next();
+      }
+
+      // All other endpoints (including /metrics) require JWT authentication
       if (!token) {
         return res.status(401).json({ success: false, error: 'Missing token' });
       }

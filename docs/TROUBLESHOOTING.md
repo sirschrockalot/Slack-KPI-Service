@@ -1,5 +1,46 @@
 # Troubleshooting - Slack KPI Service
 
+## Nightly job not posting to Slack (Heroku Scheduler / external job)
+
+**Setup**: You use a **separate** job (e.g. Heroku Scheduler) to call the Slack KPI service; there is no in-app scheduler.
+
+**Two things must be correct:**
+
+### 1. The job must authenticate
+
+The service requires either **JWT** or **scheduler secret** for `POST /report/night`:
+
+- **Option A – JWT (recommended if you can store a token):**  
+  In Heroku Scheduler, run a curl that includes a valid JWT:
+  ```bash
+  curl -X POST https://YOUR_APP.herokuapp.com/report/night -H "Authorization: Bearer YOUR_JWT_TOKEN" -H "Content-Type: application/json"
+  ```
+  Generate the token with the same `JWT_SECRET` as on Heroku (e.g. `node utils/generateJwtToken.js` locally with the same secret).
+
+- **Option B – Scheduler secret (no JWT):**  
+  1. Set a shared secret on the app:
+     ```bash
+     heroku config:set SCHEDULER_SECRET=your-long-random-secret --app slack-kpi-service
+     ```
+  2. In Heroku Scheduler, call the report with that value as the Bearer token:
+     ```bash
+     curl -X POST https://YOUR_APP.herokuapp.com/report/night -H "Authorization: Bearer your-long-random-secret" -H "Content-Type: application/json"
+     ```
+  If `SCHEDULER_SECRET` is set, the service accepts it for any `/report/*` path instead of JWT.
+
+If the job does not send a valid JWT or `SCHEDULER_SECRET`, the API returns **401 Missing token** and the report never runs.
+
+### 2. Slack must accept the message
+
+If the job succeeds (202) but nothing appears in Slack, check logs for:
+
+- **`not_allowed_token_type`** → Use a **Bot User OAuth Token** (`xoxb-`). See section below.
+- **`Invalid channel ID or bot not in channel`** → Fix channel ID and invite the bot. See section below.
+
+After fixing the token/channel, the next night run should post to Slack.
+
+---
+
 ## Night report timeout (H12) on Heroku
 
 **Symptom**: Heroku logs show `at=error code=H12 desc="Request timeout" method=POST path="/report/night"` and the request returns 503 after 30 seconds.
