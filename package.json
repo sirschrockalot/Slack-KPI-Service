@@ -21,6 +21,7 @@
   "author": "Joel Schrock",
   "license": "MIT",
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.3",
     "axios": "^1.6.0",
     "cors": "^2.8.5",
     "cron-parser": "^5.3.0",

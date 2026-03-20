@@ -12,7 +12,9 @@ const SlackService = require('./SlackService');
 const AircallService = require('./AircallService');
 const healthRouter = require('./routes/health');
 const reportRouter = require('./routes/report');
+const syncRouter = require('./routes/sync');
 const testConnectionsRouter = require('./routes/testConnections');
+const SupabaseSyncService = require('./services/supabaseSyncService');
 const { sanitizeError } = require('./utils/errorHandler');
 const { decrypt } = require('./utils/encryption');
 class ApiServer {
@@ -242,6 +244,8 @@ class ApiServer {
       this.config.acquisitionAgents
     );
 
+    this.supabaseSyncService = new SupabaseSyncService(this.logger);
+
     // Removed: Initialize report scheduler
     // Removed: const baseUrl = `http://0.0.0.0:${this.config.port}`;
     // Removed: this.reportScheduler = new ReportScheduler(baseUrl, this.logger);
@@ -461,7 +465,10 @@ class ApiServer {
     // API routes
     this.app.use(healthRouter(this.logger, this.config));
     this.app.use('/report', reportLimiter); // Apply stricter limit to report endpoints
-    this.app.use(reportRouter(this.logger, this.generateReport.bind(this), this.slackService));
+    this.app.use(
+      reportRouter(this.logger, this.generateReport.bind(this), this.slackService, this.supabaseSyncService)
+    );
+    this.app.use('/sync', syncRouter(this.logger, this.generateReport.bind(this), this.supabaseSyncService));
     this.app.use(testConnectionsRouter(this.logger, this.slackService, this.aircallService));
     // Removed: this.app.use(schedulerRouter(this.logger, this.reportScheduler, this.generateReport.bind(this), this.slackService));
   }
@@ -549,6 +556,7 @@ class ApiServer {
         this.logger.info('    POST /report/afternoon - Trigger afternoon report');
         this.logger.info('    POST /report/night - Trigger night report');
         this.logger.info('    POST /report/custom - Trigger custom time range report');
+        this.logger.info('    POST /sync/nightly-kpis - Sync nightly daily KPIs to Supabase');
         this.logger.info('    GET /metrics - Prometheus metrics (requires JWT)');
 
       });

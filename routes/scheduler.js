@@ -1,7 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 
-module.exports = function(logger, reportScheduler, generateReport, slackService) {
+module.exports = function(logger, reportScheduler, generateReport, slackService, supabaseSyncService) {
   const router = express.Router();
 
   /**
@@ -233,12 +233,65 @@ module.exports = function(logger, reportScheduler, generateReport, slackService)
       (async () => {
         try {
           const data = await generateReport('night');
-          const sent = await slackService.sendActivityReport(data);
-          if (sent && sent.ok) {
-            logger.info('Night report sent to Slack successfully');
+          // Slack should not block Supabase sync; if Slack send throws, we log and continue.
+          try {
+            const sent = await slackService.sendActivityReport(data);
+            if (sent && sent.ok) {
+              logger.info('Night report sent to Slack successfully');
+            } else {
+              const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
+              logger.error('Failed to send night report to Slack:', errMsg);
+            }
+          } catch (slackErr) {
+            logger.error('Night report Slack send error:', {
+              message: slackErr.message,
+              stack: slackErr.stack
+            });
+          }
+
+          // Supabase sync (server-side only). Failures should not affect Slack reporting.
+          if (supabaseSyncService?.isConfigured?.()) {
+            try {
+              const entryDateYMD = supabaseSyncService.getDefaultEntryDateYMD();
+              const { startISO, endISO } = supabaseSyncService.getNightWindowISOForEntryDate(entryDateYMD);
+
+              // If the Slack night fetch already matches the desired entry date, reuse it.
+              const slackEntryDateYMD = supabaseSyncService.getEntryDateFromActivityData(data);
+              const activityDataForSync =
+                slackEntryDateYMD === entryDateYMD ? data : await generateReport('night', startISO, endISO);
+
+              const syncResult = await supabaseSyncService.syncDailyPhoneKpisFromActivity({
+                entryDateYMD,
+                activityData: activityDataForSync
+              });
+
+              if (syncResult?.success) {
+                logger.info('✅ Supabase nightly KPI sync complete (from /scheduler/trigger/night)', {
+                  entryDateYMD: syncResult.entryDateYMD,
+                  rowsProcessed: syncResult.usersProcessed,
+                  rowsPrepared: syncResult.rowsPrepared,
+                  rowsInsertedOrUpdated: syncResult.rowsInsertedOrUpdated,
+                  insertedCount: syncResult.insertedCount,
+                  updatedCount: syncResult.updatedCount,
+                  unresolvedCount: syncResult.unresolvedCount
+                });
+              } else {
+                logger.warn('⚠️ Supabase nightly KPI sync not successful (from /scheduler/trigger/night)', {
+                  entryDateYMD: syncResult?.entryDateYMD || entryDateYMD,
+                  rowsProcessed: syncResult?.usersProcessed,
+                  reason: syncResult?.reason || 'unknown'
+                });
+              }
+            } catch (syncErr) {
+              const entryDateYMD = supabaseSyncService.getDefaultEntryDateYMD();
+              logger.error('❌ Supabase nightly KPI sync failed (from /scheduler/trigger/night):', {
+                entryDateYMD,
+                message: syncErr.message,
+                stack: syncErr.stack
+              });
+            }
           } else {
-            const errMsg = sent && sent.error ? sent.error : 'Failed to send night report to Slack';
-            logger.error('Failed to send night report to Slack:', errMsg);
+            logger.info('Skipping Supabase nightly KPI sync (not configured)');
           }
         } catch (err) {
           logger.error('Error running night report:', err.message, err.stack);
