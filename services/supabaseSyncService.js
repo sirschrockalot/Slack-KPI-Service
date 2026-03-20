@@ -8,7 +8,7 @@ try {
   // This will be handled at runtime when sync is invoked.
 }
 
-const aircallRepMapping = require('../config/aircallRepMapping');
+const performanceAppUserMap = require('../config/performanceAppUserMap');
 
 function toYMDLocal(date) {
   const yyyy = date.getFullYear();
@@ -48,7 +48,7 @@ function getNightWindowISOForEntryDate(entryDateYMD, opts = {}) {
 }
 
 function getEntryDateFromActivityData(activityData) {
-  // AircallService emits ISO strings; derive entry_date from local date of the window start.
+  // AircallService emits ISO strings; derive entryDate from local date of the window start.
   const startISO = activityData?.startTime;
   if (!startISO) return null;
   const startDate = new Date(startISO);
@@ -58,97 +58,79 @@ function getEntryDateFromActivityData(activityData) {
 function buildMappingIndex(mappingList) {
   const index = new Map();
   for (const m of mappingList || []) {
-    if (!m?.aircall_user_name) continue;
-    index.set(String(m.aircall_user_name).trim().toLowerCase(), m);
+    if (!m?.aircallUserName) continue;
+    index.set(String(m.aircallUserName).trim().toLowerCase(), m);
   }
   return index;
 }
 
-function tryResolveMapping({
-  aircallUserName,
-  mappingIndex,
-  dispoAgentsEnv,
-  acquisitionAgentsEnv
-}) {
+function tryResolveMapping({ aircallUserName, mappingIndex }) {
   const name = (aircallUserName || '').trim();
   if (!name) return null;
 
   const direct = mappingIndex.get(name.toLowerCase());
-  if (direct) return direct;
-
-  // Fallback: use existing repo env categorization (rep name == aircall name, user_id omitted).
-  const dispoAgents = (dispoAgentsEnv || '').split(',').map(s => s.trim()).filter(Boolean);
-  const acquisitionAgents = (acquisitionAgentsEnv || '').split(',').map(s => s.trim()).filter(Boolean);
-
-  const nameLower = name.toLowerCase();
-  const isDispo = dispoAgents.some(a => a.toLowerCase() === nameLower);
-  if (isDispo) {
-    return { rep_name: name, team: 'dispo', app_user_id: null, source_rep_name: name };
-  }
-
-  const isAcq = acquisitionAgents.some(a => a.toLowerCase() === nameLower);
-  if (isAcq) {
-    return { rep_name: name, team: 'acquisition', app_user_id: null, source_rep_name: name };
-  }
-
-  return null;
+  if (!direct) return null;
+  if (!direct.userId || !direct.teamId) return null;
+  return direct;
 }
 
-function aggregateDailyPhoneKpis({ entryDateYMD, activityData, mappingIndex, logger, config }) {
+function aggregateDailyPhoneKpis({ entryDateYMD, activityData, mappingIndex }) {
   const users = activityData?.users || [];
   const usersProcessed = users.length;
 
-  const byRepKey = new Map();
+  const byKpiKey = new Map();
   const unresolvedAircallUsers = [];
 
   for (const user of users) {
     const aircallUserName = user?.name;
-    const resolved = tryResolveMapping({
-      aircallUserName,
-      mappingIndex,
-      dispoAgentsEnv: config?.dispoAgentsEnv,
-      acquisitionAgentsEnv: config?.acquisitionAgentsEnv
-    });
+    const resolved = tryResolveMapping({ aircallUserName, mappingIndex });
 
     if (!resolved) {
       unresolvedAircallUsers.push(aircallUserName);
       continue;
     }
 
-    const rep_name = resolved.rep_name;
-    const team = resolved.team;
-    const app_user_id = resolved.app_user_id || null;
-    const source = 'aircall';
-    const key = `${entryDateYMD}|${rep_name}|${team}|${source}`;
+    const userId = String(resolved.userId);
+    const teamId = String(resolved.teamId);
+    const source = 'AIRCALL';
+    const key = `${userId}|${teamId}|${entryDateYMD}|${source}`;
 
     const dials = Number(user?.totalCalls || 0);
     const talkTimeMinutesRaw = Number(user?.totalDurationMinutes || 0); // can be decimal
+    const inboundTalkTimeMinutesRaw = Number(user?.inboundDurationMinutes || 0);
+    const outboundTalkTimeMinutesRaw = Number(user?.outboundDurationMinutes || 0);
 
-    const prev = byRepKey.get(key) || {
-      entry_date: entryDateYMD,
-      rep_name,
-      user_id: app_user_id,
-      team,
+    const prev = byKpiKey.get(key) || {
+      userId,
+      teamId,
+      entryDate: entryDateYMD,
       source,
       dials: 0,
       talk_time_minutes_raw: 0,
+      inbound_talk_time_minutes_raw: 0,
+      outbound_talk_time_minutes_raw: 0,
       raw_aircall_users: []
     };
 
     prev.dials += dials;
     prev.talk_time_minutes_raw += talkTimeMinutesRaw;
+    prev.inbound_talk_time_minutes_raw += inboundTalkTimeMinutesRaw;
+    prev.outbound_talk_time_minutes_raw += outboundTalkTimeMinutesRaw;
     prev.raw_aircall_users.push({
       aircall_user_name: aircallUserName,
       aircall_user_id: user?.user_id || null,
+      mapped_user_id: userId,
+      mapped_team_id: teamId,
+      mapped_rep_name: resolved.repName || null,
+      mapped_team_name: resolved.teamName || null,
       dials,
       talk_time_minutes_raw: talkTimeMinutesRaw,
+      inbound_talk_time_minutes_raw: inboundTalkTimeMinutesRaw,
+      outbound_talk_time_minutes_raw: outboundTalkTimeMinutesRaw,
       agentCategory: user?.agentCategory || null
     });
 
-    // Preserve a non-null app_user_id if later mappings provide it.
-    if (!prev.user_id && app_user_id) prev.user_id = app_user_id;
-
-    byRepKey.set(key, prev);
+    byKpiKey.set(key, prev);
   }
 
   const { startTime, endTime } = activityData || {};
@@ -158,18 +140,24 @@ function aggregateDailyPhoneKpis({ entryDateYMD, activityData, mappingIndex, log
     endTime
   };
 
-  const rows = Array.from(byRepKey.values()).map(agg => ({
-    entry_date: agg.entry_date,
-    rep_name: agg.rep_name,
-    user_id: agg.user_id,
-    team: agg.team,
+  const rows = Array.from(byKpiKey.values()).map(agg => ({
+    userId: agg.userId,
+    teamId: agg.teamId,
+    entryDate: agg.entryDate,
     source: agg.source,
     dials: Math.round(agg.dials),
-    talk_time_minutes: Math.round(agg.talk_time_minutes_raw),
-    raw_payload: {
+    talkTimeMinutes: Math.round(agg.talk_time_minutes_raw),
+    inboundTalkTimeMinutes: Math.round(agg.inbound_talk_time_minutes_raw),
+    outboundTalkTimeMinutes: Math.round(agg.outbound_talk_time_minutes_raw),
+    rawPayload: {
       window: rawWindow,
       by_aircall_users: agg.raw_aircall_users
-    }
+    },
+    externalRef: agg.raw_aircall_users
+      .map(u => u.aircall_user_id)
+      .filter(Boolean)
+      .sort()
+      .join(',')
   }));
 
   return {
@@ -181,7 +169,7 @@ function aggregateDailyPhoneKpis({ entryDateYMD, activityData, mappingIndex, log
 }
 
 class SupabaseSyncService {
-  constructor(logger = null, options = {}) {
+  constructor(logger = null) {
     this.logger =
       logger ||
       winston.createLogger({
@@ -193,10 +181,6 @@ class SupabaseSyncService {
     this.supabaseUrl = process.env.SUPABASE_URL;
     this.supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     this.supabaseEnabled = Boolean(this.supabaseUrl && this.supabaseServiceRoleKey && createClient);
-    this.config = {
-      dispoAgentsEnv: process.env.DISPO_AGENTS || process.env.INPUT_DISPO_AGENTS || '',
-      acquisitionAgentsEnv: process.env.ACQUISITION_AGENTS || process.env.INPUT_ACQUISITION_AGENTS || ''
-    };
 
     if (this.supabaseEnabled) {
       this.supabase = createClient(this.supabaseUrl, this.supabaseServiceRoleKey, {
@@ -245,33 +229,32 @@ class SupabaseSyncService {
     }
 
     // Determine insert vs update for logging (idempotency/observability).
-    const repNames = Array.from(new Set(rows.map(r => r.rep_name)));
-    const teams = Array.from(new Set(rows.map(r => r.team)));
+    const userIds = Array.from(new Set(rows.map(r => r.userId)));
+    const teamIds = Array.from(new Set(rows.map(r => r.teamId)));
 
     const { data: existingRows, error: existingError } = await this.supabase
-      .from('daily_phone_kpis')
-      .select('rep_name, team, source')
-      .eq('entry_date', entryDateYMD)
-      .eq('source', 'aircall')
-      .in('rep_name', repNames)
-      .in('team', teams);
+      .from('DailyKpiEntry')
+      .select('userId, teamId, source')
+      .eq('entryDate', entryDateYMD)
+      .eq('source', 'AIRCALL')
+      .in('userId', userIds)
+      .in('teamId', teamIds);
 
     if (existingError) {
       throw existingError;
     }
 
-    const existingSet = new Set((existingRows || []).map(r => `${entryDateYMD}|${r.rep_name}|${r.team}|${r.source}`));
-    const insertedCount = rows.filter(r => !existingSet.has(`${entryDateYMD}|${r.rep_name}|${r.team}|${r.source}`)).length;
+    const existingSet = new Set((existingRows || []).map(r => `${r.userId}|${r.teamId}|${entryDateYMD}|${r.source}`));
+    const insertedCount = rows.filter(r => !existingSet.has(`${r.userId}|${r.teamId}|${entryDateYMD}|${r.source}`)).length;
     const updatedCount = rows.length - insertedCount;
 
     const upsertPayload = rows.map(r => ({
-      ...r,
-      updated_at: new Date().toISOString()
+      ...r
     }));
 
     const { error: upsertError, data: upsertData } = await this.supabase
-      .from('daily_phone_kpis')
-      .upsert(upsertPayload, { onConflict: 'entry_date,rep_name,team,source' })
+      .from('DailyKpiEntry')
+      .upsert(upsertPayload, { onConflict: 'userId,teamId,entryDate,source' })
       .select('id');
 
     if (upsertError) {
@@ -302,13 +285,11 @@ class SupabaseSyncService {
       };
     }
 
-    const mappingIndex = buildMappingIndex(aircallRepMapping);
+    const mappingIndex = buildMappingIndex(performanceAppUserMap);
     const { rows, usersProcessed, unresolvedCount, unresolvedAircallUsers } = aggregateDailyPhoneKpis({
       entryDateYMD,
       activityData,
-      mappingIndex,
-      logger: this.logger,
-      config: this.config
+      mappingIndex
     });
 
     if (unresolvedCount > 0) {
